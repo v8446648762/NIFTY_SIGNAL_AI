@@ -21,16 +21,17 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MainActivity : Activity() {
-    private val bg = Color.rgb(13, 16, 24)
-    private val surface = Color.argb(188, 34, 33, 59)
-    private val surface2 = Color.argb(205, 41, 38, 66)
-    private val border = Color.argb(170, 167, 139, 250)
-    private val muted = Color.rgb(185, 181, 207)
-    private val white = Color.rgb(246, 243, 255)
-    private val green = Color.rgb(72, 232, 176)
-    private val cyan = Color.rgb(167, 139, 250)
-    private val red = Color.rgb(255, 79, 203)
-    private val amber = Color.rgb(255, 112, 216)
+    // Soft blue-purple glass theme inspired by the approved reference image.
+    private val bg = Color.rgb(91, 166, 235)
+    private val surface = Color.argb(112, 224, 243, 255)
+    private val surface2 = Color.argb(142, 209, 232, 255)
+    private val border = Color.argb(190, 239, 250, 255)
+    private val muted = Color.rgb(226, 242, 255)
+    private val white = Color.rgb(255, 255, 255)
+    private val green = Color.rgb(28, 215, 170)
+    private val cyan = Color.rgb(203, 237, 255)
+    private val red = Color.rgb(255, 112, 153)
+    private val amber = Color.rgb(255, 235, 174)
     private var tf = "5 MIN"
     private var paperSide = TradeBias.BUY_CE
     private var paperEntry = 0.0
@@ -47,7 +48,10 @@ class MainActivity : Activity() {
 
     private fun rounded(color: Int, stroke: Int = border, radius: Int = 18): GradientDrawable =
         GradientDrawable().apply {
-            setColor(color)
+            setColors(intArrayOf(color, Color.argb(
+                min(255, Color.alpha(color) + 12),
+                Color.red(color), Color.green(color), Color.blue(color)
+            )), GradientDrawable.Orientation.TL_BR)
             cornerRadius = dp(radius).toFloat()
             setStroke(dp(1), stroke)
         }
@@ -139,13 +143,20 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = bg
-        window.navigationBarColor = bg
+        window.statusBarColor = Color.rgb(105, 174, 239)
+        window.navigationBarColor = Color.rgb(124, 156, 218)
         window.decorView.systemUiVisibility = 0
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    Color.rgb(91, 184, 255),
+                    Color.rgb(133, 190, 250),
+                    Color.rgb(194, 151, 213)
+                )
+            )
         }
         val scroll = ScrollView(this).apply {
             clipToPadding = false
@@ -203,7 +214,7 @@ class MainActivity : Activity() {
 
     private fun buildMarketCard(): View {
         val box = card()
-        box.background = rounded(Color.argb(178, 34, 33, 59), Color.argb(210, 54, 191, 255), 20)
+        box.background = rounded(Color.argb(118, 232, 247, 255), Color.argb(225, 248, 253, 255), 22)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("NIFTY 50", 13f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton("NIFTY 50", "NIFTY 50 हा भारतातील प्रमुख 50 कंपन्यांचा निर्देशांक आहे. हा कार्ड Live Index किंमत, बदल, Day High आणि Day Low दाखवेल. सध्या Feed Offline आहे.", "NIFTY 50 is an index of 50 major Indian companies. This card will show the live index value, change, day high, and day low. The feed is currently offline."))
@@ -223,7 +234,7 @@ class MainActivity : Activity() {
 
     private fun buildSignalCard(): View {
         val box = card()
-        box.background = rounded(Color.argb(182, 39, 31, 66), Color.argb(220, 255, 79, 203), 20)
+        box.background = rounded(Color.argb(126, 224, 235, 255), Color.argb(225, 255, 255, 255), 22)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("AI MARKET SETUP", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton("BUY CE / BUY PE / WAIT", "BUY CE म्हणजे Call Option खरेदीचा विचार; BUY PE म्हणजे Put Option खरेदीचा विचार; WAIT म्हणजे सध्या स्पष्ट setup नाही. ही सूचना आहे, ऑर्डर नाही. स्वतः तपासूनच ट्रेड घ्या.", "BUY CE suggests considering a Call option; BUY PE suggests considering a Put option; WAIT means there is no clear setup. This is an analysis suggestion, not an order. Verify independently before trading."))
@@ -375,7 +386,7 @@ class MainActivity : Activity() {
             setHintTextColor(muted)
             textSize = 14f
             setSingleLine(true)
-            background = rounded(Color.argb(150, 25, 23, 43), border, 10)
+            background = rounded(Color.argb(125, 226, 242, 255), border, 12)
             setPadding(dp(10), dp(7), dp(10), dp(7))
         }
 
@@ -464,7 +475,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(10), dp(8), dp(10))
-            background = rounded(Color.argb(220, 18, 16, 31), Color.argb(150, 167, 139, 250), 18)
+            background = rounded(Color.argb(145, 219, 237, 255), Color.argb(210, 255, 255, 255), 20)
         }
         listOf("⌂\nDashboard", "▥\nChart", "✦\nAI Signals", "◷\nAlerts").forEachIndexed { i, label ->
             val color = if (i == 0) cyan else muted
@@ -494,7 +505,7 @@ class MainActivity : Activity() {
 
         override fun onDraw(c: Canvas) {
             super.onDraw(c)
-            c.drawColor(Color.rgb(20, 18, 34))
+            c.drawColor(Color.argb(155, 116, 176, 225))
             val l = dp(34).toFloat()
             val r = width - dp(8).toFloat()
             val t = dp(18).toFloat()
