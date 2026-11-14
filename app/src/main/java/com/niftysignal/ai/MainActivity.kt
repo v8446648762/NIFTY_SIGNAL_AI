@@ -71,7 +71,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle("$title  •  मराठी / English")
-                    .setMessage("मराठी:\\n$marathi\\n\\nEnglish:\\n$english")
+                    .setMessage("मराठी:\n$marathi\n\nEnglish:\n$english")
                     .setPositiveButton("समजले / Got it", null)
                     .show()
             }
