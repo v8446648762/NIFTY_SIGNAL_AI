@@ -48,10 +48,14 @@ class MainActivity : Activity() {
 
     private fun rounded(color: Int, stroke: Int = border, radius: Int = 18): GradientDrawable =
         GradientDrawable().apply {
-            setColors(intArrayOf(color, Color.argb(
-                min(255, Color.alpha(color) + 12),
-                Color.red(color), Color.green(color), Color.blue(color)
-            )), GradientDrawable.Orientation.TL_BR)
+            colors = intArrayOf(
+                color,
+                Color.argb(
+                    min(255, Color.alpha(color) + 12),
+                    Color.red(color), Color.green(color), Color.blue(color)
+                )
+            )
+            orientation = GradientDrawable.Orientation.TL_BR
             cornerRadius = dp(radius).toFloat()
             setStroke(dp(1), stroke)
         }
