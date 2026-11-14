@@ -20,16 +20,16 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MainActivity : Activity() {
-    private val bg = Color.rgb(5, 7, 11)
-    private val surface = Color.rgb(13, 18, 25)
-    private val surface2 = Color.rgb(19, 27, 37)
-    private val border = Color.rgb(39, 53, 64)
-    private val muted = Color.rgb(137, 157, 171)
-    private val white = Color.rgb(239, 247, 249)
-    private val green = Color.rgb(183, 255, 74)
-    private val cyan = Color.rgb(48, 220, 255)
-    private val red = Color.rgb(255, 93, 112)
-    private val amber = Color.rgb(183, 255, 74)
+    private val bg = Color.rgb(13, 16, 24)
+    private val surface = Color.argb(188, 34, 33, 59)
+    private val surface2 = Color.argb(205, 41, 38, 66)
+    private val border = Color.argb(170, 167, 139, 250)
+    private val muted = Color.rgb(185, 181, 207)
+    private val white = Color.rgb(246, 243, 255)
+    private val green = Color.rgb(72, 232, 176)
+    private val cyan = Color.rgb(167, 139, 250)
+    private val red = Color.rgb(255, 79, 203)
+    private val amber = Color.rgb(255, 112, 216)
     private var tf = "5 MIN"
     private lateinit var chart: DemoChart
     private lateinit var tf5: TextView
@@ -56,7 +56,7 @@ class MainActivity : Activity() {
     private fun card(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(15), dp(13), dp(15), dp(13))
-        background = rounded(surface)
+        background = rounded(surface, Color.argb(150, 167, 139, 250))
     }
 
     private fun addGap(root: LinearLayout, h: Int = 12) {
@@ -119,7 +119,7 @@ class MainActivity : Activity() {
 
     private fun pill(label: String, color: Int): TextView = text(label, 10f, color, true).apply {
         setPadding(dp(10), dp(6), dp(10), dp(6))
-        background = rounded(Color.rgb(24, 43, 60), color, 30)
+        background = rounded(Color.argb(190, 41, 38, 66), color, 30)
     }
 
     private fun metric(label: String, value: String, color: Int = white): LinearLayout =
@@ -192,7 +192,7 @@ class MainActivity : Activity() {
 
     private fun buildMarketCard(): View {
         val box = card()
-        box.background = rounded(Color.rgb(10, 20, 24), Color.rgb(48, 220, 255), 20)
+        box.background = rounded(Color.argb(178, 34, 33, 59), Color.argb(210, 54, 191, 255), 20)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("NIFTY 50", 13f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton("NIFTY 50", "NIFTY 50 हा भारतातील प्रमुख 50 कंपन्यांचा निर्देशांक आहे. हा कार्ड Live Index किंमत, बदल, Day High आणि Day Low दाखवेल. सध्या Feed Offline आहे.", "NIFTY 50 is an index of 50 major Indian companies. This card will show the live index value, change, day high, and day low. The feed is currently offline."))
@@ -212,7 +212,7 @@ class MainActivity : Activity() {
 
     private fun buildSignalCard(): View {
         val box = card()
-        box.background = rounded(Color.rgb(11, 23, 19), Color.rgb(183, 255, 74), 20)
+        box.background = rounded(Color.argb(182, 39, 31, 66), Color.argb(220, 255, 79, 203), 20)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("AI MARKET SETUP", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton("BUY CE / BUY PE / WAIT", "BUY CE म्हणजे Call Option खरेदीचा विचार; BUY PE म्हणजे Put Option खरेदीचा विचार; WAIT म्हणजे सध्या स्पष्ट setup नाही. ही सूचना आहे, ऑर्डर नाही. स्वतः तपासूनच ट्रेड घ्या.", "BUY CE suggests considering a Call option; BUY PE suggests considering a Put option; WAIT means there is no clear setup. This is an analysis suggestion, not an order. Verify independently before trading."))
@@ -238,7 +238,7 @@ class MainActivity : Activity() {
         tf5 = text("5 MIN", 12f, cyan, true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(15), dp(8), dp(15), dp(8))
-            background = rounded(Color.rgb(15, 39, 43), cyan, 12)
+            background = rounded(Color.argb(205, 50, 42, 83), cyan, 12)
             setOnClickListener { setTf("5 MIN") }
         }
         tf1 = text("1 MIN", 12f, muted, true).apply {
@@ -338,7 +338,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(10), dp(8), dp(10))
-            setBackgroundColor(Color.rgb(8, 12, 17))
+            background = rounded(Color.argb(220, 18, 16, 31), Color.argb(150, 167, 139, 250), 18)
         }
         listOf("⌂\nDashboard", "▥\nChart", "✦\nAI Signals", "◷\nAlerts").forEachIndexed { i, label ->
             val color = if (i == 0) cyan else muted
@@ -354,8 +354,8 @@ class MainActivity : Activity() {
         tf = value
         tf5.setTextColor(if (tf == "5 MIN") cyan else muted)
         tf1.setTextColor(if (tf == "1 MIN") cyan else muted)
-        tf5.background = rounded(if (tf == "5 MIN") Color.rgb(18, 48, 66) else surface2, if (tf == "5 MIN") cyan else border, 12)
-        tf1.background = rounded(if (tf == "1 MIN") Color.rgb(18, 48, 66) else surface2, if (tf == "1 MIN") cyan else border, 12)
+        tf5.background = rounded(if (tf == "5 MIN") Color.argb(210, 50, 42, 83) else surface2, if (tf == "5 MIN") cyan else border, 12)
+        tf1.background = rounded(if (tf == "1 MIN") Color.argb(210, 50, 42, 83) else surface2, if (tf == "1 MIN") cyan else border, 12)
         chart.invalidate()
     }
 
@@ -368,7 +368,7 @@ class MainActivity : Activity() {
 
         override fun onDraw(c: Canvas) {
             super.onDraw(c)
-            c.drawColor(surface)
+            c.drawColor(Color.rgb(20, 18, 34))
             val l = dp(34).toFloat()
             val r = width - dp(8).toFloat()
             val t = dp(18).toFloat()
