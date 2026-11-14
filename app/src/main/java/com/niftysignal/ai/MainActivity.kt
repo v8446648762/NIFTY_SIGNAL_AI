@@ -122,7 +122,7 @@ class MainActivity : Activity() {
                 section(this, "SIGNAL ALERTS", "NOTIFICATIONS")
                 addView(buildAlerts())
                 addGap(this, 18)
-                addView(text("NIFTY_SIGNAL_AI   /   MARKET INTELLIGENCE", 10f, muted, true).apply {
+                addView(text("MGrow   /   MARKET INTELLIGENCE", 10f, muted, true).apply {
                     gravity = Gravity.CENTER
                     setPadding(0, dp(8), 0, dp(12))
                 })
@@ -139,8 +139,8 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val titleCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        titleCol.addView(text("NIFTY_SIGNAL_AI", 20f, white, true))
-        titleCol.addView(text("INTELLIGENT NIFTY MARKET TERMINAL", 9f, cyan, true))
+        titleCol.addView(text("MGrow", 24f, white, true))
+        titleCol.addView(text("AI NIFTY OPTIONS TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         wrap.addView(pill("●  DEMO MODE", amber))
         return wrap
