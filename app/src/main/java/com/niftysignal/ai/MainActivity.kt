@@ -56,6 +56,25 @@ class MainActivity : Activity() {
         root.addView(label("EMA 21  25,198.00",14f,Color.rgb(255,190,75)))
         root.addView(label("RSI         51.6"))
         root.addView(label("Illustrative values only; not calculated from live candles.",11f,muted))
+        heading("ADVANCED MARKET LEVELS")
+        val levels=LinearLayout(this).apply{orientation=1;setPadding(dp(12),dp(8),dp(12),dp(8));setBackgroundColor(panel)}
+        levels.addView(label("Support: Waiting for live candles",13f,muted))
+        levels.addView(label("Resistance: Waiting for live candles",13f,muted))
+        levels.addView(label("CPR / Previous Day High-Low / Opening Range: Pending live data",12f,muted))
+        root.addView(levels)
+        heading("ADVANCED INDICATORS")
+        val advanced=LinearLayout(this).apply{orientation=1;setPadding(dp(12),dp(8),dp(12),dp(8));setBackgroundColor(panel)}
+        advanced.addView(label("Supertrend     LOCKED — needs live OHLC candles",13f,muted))
+        advanced.addView(label("MACD              LOCKED — needs live OHLC candles",13f,muted))
+        advanced.addView(label("ADX / Bollinger Bands  LOCKED — needs live OHLC candles",13f,muted))
+        advanced.addView(label("Volume confirmation  LOCKED — needs live volume feed",13f,muted))
+        root.addView(advanced)
+        heading("SMART ALERTS")
+        val alerts=LinearLayout(this).apply{orientation=1;setPadding(dp(12),dp(8),dp(12),dp(8));setBackgroundColor(panel)}
+        alerts.addView(label("CE / PE setup alerts: Not active",13f,muted))
+        alerts.addView(label("VWAP breakout / EMA crossover: Not active",13f,muted))
+        alerts.addView(label("Alerts activate only after live data is connected.",11f,Color.YELLOW))
+        root.addView(alerts)
         heading("SIGNAL SUGGESTION")
         val signal=LinearLayout(this).apply{orientation=1;setPadding(dp(14),dp(10),dp(14),dp(10));setBackgroundColor(panel)}
         signal.addView(label("WAIT",28f,Color.YELLOW,true));signal.addView(label("Demo only — no live signal.",13f,muted));root.addView(signal)
