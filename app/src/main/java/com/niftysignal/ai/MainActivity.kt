@@ -21,17 +21,17 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MainActivity : Activity() {
-    // Soft blue-purple glass theme inspired by the approved reference image.
-    private val bg = Color.rgb(91, 166, 235)
-    private val surface = Color.argb(112, 224, 243, 255)
-    private val surface2 = Color.argb(142, 209, 232, 255)
-    private val border = Color.argb(190, 239, 250, 255)
-    private val muted = Color.rgb(57, 72, 96)
-    private val white = Color.rgb(24, 32, 52)
-    private val green = Color.rgb(0, 145, 112)
-    private val cyan = Color.rgb(35, 91, 166)
-    private val red = Color.rgb(210, 55, 103)
-    private val amber = Color.rgb(142, 93, 12)
+    // Premium midnight glass theme: high-contrast text with cyan/violet accents.
+    private val bg = Color.rgb(16, 24, 39)
+    private val surface = Color.argb(224, 29, 43, 67)
+    private val surface2 = Color.argb(236, 36, 54, 83)
+    private val border = Color.argb(210, 75, 101, 139)
+    private val muted = Color.rgb(195, 208, 226)
+    private val white = Color.rgb(255, 255, 255)
+    private val green = Color.rgb(0, 200, 150)
+    private val cyan = Color.rgb(0, 213, 255)
+    private val red = Color.rgb(255, 85, 119)
+    private val amber = Color.rgb(255, 200, 87)
     private var tf = "5 MIN"
     private var paperSide = TradeBias.BUY_CE
     private var paperEntry = 0.0
@@ -118,6 +118,10 @@ class MainActivity : Activity() {
             "निवडलेल्या market conditions पूर्ण झाल्यावर सूचना मिळवण्यासाठी. Live data आणि alert logic जोडल्यावरच alerts सुरू होतील.",
             "Notifies you when selected market conditions occur. Alerts will activate only after live data and alert logic are connected."
         )
+        "AI TRADE RISK METER" -> Pair(
+            "Indicators, trend, price action आणि market sentiment यांतील जोखीम घटक एकत्र मोजून 0 ते 100 Risk Score दाखवेल. कमी score म्हणजे तुलनेने कमी risk; हा नफ्याचा probability नाही. Live data शिवाय score दाखवला जाणार नाही.",
+            "Combines risk factors from indicators, trend, price action, and market sentiment into a 0–100 risk score. A lower score means comparatively lower assessed risk; it is not a probability of profit. No score is shown without validated live data."
+        )
         else -> null
     }
 
@@ -147,8 +151,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(105, 174, 239)
-        window.navigationBarColor = Color.rgb(124, 156, 218)
+        window.statusBarColor = Color.rgb(11, 18, 32)
+        window.navigationBarColor = Color.rgb(11, 18, 32)
         window.decorView.systemUiVisibility = 0
 
         val root = LinearLayout(this).apply {
@@ -156,9 +160,9 @@ class MainActivity : Activity() {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(
-                    Color.rgb(91, 184, 255),
-                    Color.rgb(133, 190, 250),
-                    Color.rgb(194, 151, 213)
+                    Color.rgb(11, 18, 32),
+                    Color.rgb(20, 35, 61),
+                    Color.rgb(36, 27, 70)
                 )
             )
         }
@@ -178,6 +182,9 @@ class MainActivity : Activity() {
                 addView(buildChartCard())
                 addGap(this, 18)
                 addView(buildFeatureGrid())
+                addGap(this, 8)
+                section(this, "AI TRADE RISK METER", "LIVE RISK SCORE")
+                addView(buildRiskMeter())
                 addGap(this, 18)
                 section(this, "PAPER TRADING", "MANUAL PRACTICE")
                 addView(buildPaperTrading())
@@ -249,7 +256,7 @@ class MainActivity : Activity() {
 
     private fun buildMarketCard(): View {
         val box = card()
-        box.background = rounded(Color.argb(118, 232, 247, 255), Color.argb(225, 248, 253, 255), 22)
+        box.background = rounded(Color.argb(235, 25, 39, 62), Color.argb(220, 74, 101, 140), 22)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("NIFTY 50", 13f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton("NIFTY 50", "NIFTY 50 हा भारतातील प्रमुख 50 कंपन्यांचा निर्देशांक आहे. हा कार्ड Live Index किंमत, बदल, Day High आणि Day Low दाखवेल. सध्या Feed Offline आहे.", "NIFTY 50 is an index of 50 major Indian companies. This card will show the live index value, change, day high, and day low. The feed is currently offline."))
@@ -269,7 +276,7 @@ class MainActivity : Activity() {
 
     private fun buildSignalCard(): View {
         val box = card()
-        box.background = rounded(Color.argb(126, 224, 235, 255), Color.argb(225, 255, 255, 255), 22)
+        box.background = rounded(Color.argb(238, 29, 43, 67), Color.argb(225, 75, 101, 139), 22)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("AI MARKET SETUP", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton("BUY CE / BUY PE / WAIT", "BUY CE म्हणजे Call Option खरेदीचा विचार; BUY PE म्हणजे Put Option खरेदीचा विचार; WAIT म्हणजे सध्या स्पष्ट setup नाही. ही सूचना आहे, ऑर्डर नाही. स्वतः तपासूनच ट्रेड घ्या.", "BUY CE suggests considering a Call option; BUY PE suggests considering a Put option; WAIT means there is no clear setup. This is an analysis suggestion, not an order. Verify independently before trading."))
@@ -391,6 +398,70 @@ class MainActivity : Activity() {
     }
 
 
+    // Risk score is a weighted assessment of adverse conditions, not a win probability.
+    // Category inputs are normalized from 0 (low risk) to 100 (high risk) after live data integration.
+    private fun calculateTradeRisk(
+        indicatorRisk: Double,
+        trendRisk: Double,
+        priceActionRisk: Double,
+        sentimentRisk: Double
+    ): Int {
+        val score = indicatorRisk.coerceIn(0.0, 100.0) * 0.30 +
+            trendRisk.coerceIn(0.0, 100.0) * 0.25 +
+            priceActionRisk.coerceIn(0.0, 100.0) * 0.25 +
+            sentimentRisk.coerceIn(0.0, 100.0) * 0.20
+        return score.toInt().coerceIn(0, 100)
+    }
+
+    private fun buildRiskMeter(): View {
+        val box = card()
+        box.background = rounded(Color.argb(238, 23, 37, 60), Color.argb(225, 0, 213, 255), 22)
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        top.addView(text("OVERALL TRADE RISK", 12f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(helpButton(
+            "AI TRADE RISK METER",
+            "हा score 4 भागांवरून तयार होईल: Indicators 30%, Trend 25%, Price Action 25%, Market Sentiment 20%. प्रत्येक भागात adverse conditions जास्त असतील तर Risk Score वाढेल. हा score live candles आणि validated calculations मिळाल्यावरच दाखवला जाईल.",
+            "The score combines four components: Indicators 30%, Trend 25%, Price Action 25%, and Market Sentiment 20%. More adverse conditions increase the risk score. It will be displayed only after live candles and validated calculations are available."
+        ))
+        top.addView(pill("WAITING FOR FEED", amber))
+        box.addView(top)
+        addGap(box, 10)
+        val scoreRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        scoreRow.addView(text("—%", 38f, cyan, true), LinearLayout.LayoutParams(0, -2, 1f))
+        scoreRow.addView(text("Risk score unavailable\nuntil validated live data", 11f, muted, true))
+        box.addView(scoreRow)
+        addGap(box, 8)
+        box.addView(text("RISK COMPONENTS", 10f, cyan, true))
+        addGap(box, 6)
+        val components = listOf(
+            "Indicators (VWAP / EMA / RSI / MACD)" to "30%",
+            "Trend strength & direction" to "25%",
+            "Price action & candle structure" to "25%",
+            "Market sentiment & breadth" to "20%"
+        )
+        components.forEach { item ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(text(item.first, 11f, muted), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(text(item.second, 11f, white, true))
+            box.addView(row)
+            addGap(box, 5)
+        }
+        box.addView(text(
+            "LOW 0–30  •  MODERATE 31–60  •  HIGH 61–100. Risk score is not a profit probability or a trade guarantee.",
+            10f, amber
+        ))
+        return box
+    }
+
     private fun buildPaperTrading(): View {
         val box = card()
         box.addView(text("Practice trades only • No broker connection", 11f, amber, true))
@@ -400,13 +471,13 @@ class MainActivity : Activity() {
         val ceButton = Button(this).apply {
             text = "BUY CE"
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(91, 65, 170))
+            setBackgroundColor(Color.rgb(91, 76, 190))
             setOnClickListener { paperSide = TradeBias.BUY_CE }
         }
         val peButton = Button(this).apply {
             text = "BUY PE"
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(150, 45, 120))
+            setBackgroundColor(Color.rgb(190, 48, 105))
             setOnClickListener { paperSide = TradeBias.BUY_PE }
         }
         sideRow.addView(ceButton, LinearLayout.LayoutParams(0, dp(46), 1f))
@@ -421,7 +492,7 @@ class MainActivity : Activity() {
             setHintTextColor(muted)
             textSize = 14f
             setSingleLine(true)
-            background = rounded(Color.argb(125, 226, 242, 255), border, 12)
+            background = rounded(Color.argb(245, 36, 54, 83), border, 12)
             setPadding(dp(10), dp(7), dp(10), dp(7))
         }
 
@@ -510,7 +581,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(10), dp(8), dp(10))
-            background = rounded(Color.argb(145, 219, 237, 255), Color.argb(210, 255, 255, 255), 20)
+            background = rounded(Color.argb(235, 22, 34, 55), Color.argb(220, 75, 101, 139), 20)
         }
         listOf("⌂\nDashboard", "▥\nChart", "✦\nAI Signals", "◷\nAlerts").forEachIndexed { i, label ->
             val color = if (i == 0) cyan else muted
@@ -540,7 +611,7 @@ class MainActivity : Activity() {
 
         override fun onDraw(c: Canvas) {
             super.onDraw(c)
-            c.drawColor(Color.argb(155, 116, 176, 225))
+            c.drawColor(Color.argb(245, 20, 34, 57))
             val l = dp(34).toFloat()
             val r = width - dp(8).toFloat()
             val t = dp(18).toFloat()
