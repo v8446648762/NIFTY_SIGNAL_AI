@@ -26,12 +26,12 @@ class MainActivity : Activity() {
     private val surface = Color.argb(112, 224, 243, 255)
     private val surface2 = Color.argb(142, 209, 232, 255)
     private val border = Color.argb(190, 239, 250, 255)
-    private val muted = Color.rgb(226, 242, 255)
-    private val white = Color.rgb(255, 255, 255)
-    private val green = Color.rgb(28, 215, 170)
-    private val cyan = Color.rgb(203, 237, 255)
-    private val red = Color.rgb(255, 112, 153)
-    private val amber = Color.rgb(255, 235, 174)
+    private val muted = Color.rgb(67, 88, 119)
+    private val white = Color.rgb(31, 45, 72)
+    private val green = Color.rgb(0, 145, 112)
+    private val cyan = Color.rgb(35, 91, 166)
+    private val red = Color.rgb(210, 55, 103)
+    private val amber = Color.rgb(142, 93, 12)
     private var tf = "5 MIN"
     private var paperSide = TradeBias.BUY_CE
     private var paperEntry = 0.0
@@ -177,17 +177,7 @@ class MainActivity : Activity() {
                 section(this, "LIVE MARKET CHART", "NIFTY 50")
                 addView(buildChartCard())
                 addGap(this, 18)
-                section(this, "TECHNICAL ANALYTICS", "LIVE CALCULATION PENDING")
-                addView(buildIndicators())
-                addGap(this, 18)
-                section(this, "MARKET LEVELS", "AUTO DETECTION")
-                addView(buildLevels())
-                addGap(this, 18)
-                section(this, "MARKET INTELLIGENCE", "SMART FILTERS")
-                addView(buildInsights())
-                addGap(this, 18)
-                section(this, "SIGNAL ALERTS", "NOTIFICATIONS")
-                addView(buildAlerts())
+                addView(buildFeatureGrid())
                 addGap(this, 18)
                 section(this, "PAPER TRADING", "MANUAL PRACTICE")
                 addView(buildPaperTrading())
@@ -201,6 +191,47 @@ class MainActivity : Activity() {
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(buildBottomBar())
         setContentView(root)
+    }
+
+    private fun buildFeatureGrid(): View {
+        val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        fun tile(title: String, subtitle: String, content: View): LinearLayout {
+            val column = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, -1, 1f)
+            }
+            val heading = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(2), 0, dp(2), dp(6))
+            }
+            heading.addView(text(title, 12f, white, true))
+            heading.addView(text(subtitle, 8f, muted, true))
+            column.addView(heading)
+            column.addView(content, LinearLayout.LayoutParams(-1, -2))
+            return column
+        }
+
+        fun addPair(left: LinearLayout, right: LinearLayout) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            row.addView(left, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(6) })
+            row.addView(right, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
+            outer.addView(row)
+            addGap(outer, 14)
+        }
+
+        addPair(
+            tile("TECHNICAL ANALYTICS", "LIVE CALCULATION", buildIndicators()),
+            tile("MARKET LEVELS", "AUTO DETECTION", buildLevels())
+        )
+        addPair(
+            tile("MARKET INTELLIGENCE", "SMART FILTERS", buildInsights()),
+            tile("SIGNAL ALERTS", "NOTIFICATIONS", buildAlerts())
+        )
+        return outer
     }
 
     private fun buildHeader(): View {
@@ -368,13 +399,13 @@ class MainActivity : Activity() {
         val sideRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val ceButton = Button(this).apply {
             text = "BUY CE"
-            setTextColor(white)
+            setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(91, 65, 170))
             setOnClickListener { paperSide = TradeBias.BUY_CE }
         }
         val peButton = Button(this).apply {
             text = "BUY PE"
-            setTextColor(white)
+            setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(150, 45, 120))
             setOnClickListener { paperSide = TradeBias.BUY_PE }
         }
