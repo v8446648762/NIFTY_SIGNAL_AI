@@ -387,6 +387,7 @@ class MainActivity : Activity() {
         box.addView(entryRow)
         addGap(box, 8)
 
+        lateinit var closeButton: Button
         val openButton = Button(this).apply {
             text = "SAVE PAPER ENTRY"
             setOnClickListener {
@@ -400,7 +401,6 @@ class MainActivity : Activity() {
                     paperStatus.text = "Enter a valid premium and quantity."
                     return@setOnClickListener
                 }
-                paperSide = if (ceButton.isPressed) TradeBias.BUY_CE else paperSide
                 paperEntry = entry
                 paperQuantity = qty
                 paperOpen = true
@@ -418,7 +418,7 @@ class MainActivity : Activity() {
         box.addView(exitField, LinearLayout.LayoutParams(-1, dp(52)))
         addGap(box, 8)
 
-        val closeButton = Button(this).apply {
+        closeButton = Button(this).apply {
             text = "CLOSE PAPER TRADE"
             isEnabled = false
             setOnClickListener {
