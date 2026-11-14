@@ -12,6 +12,7 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -31,6 +32,13 @@ class MainActivity : Activity() {
     private val red = Color.rgb(255, 79, 203)
     private val amber = Color.rgb(255, 112, 216)
     private var tf = "5 MIN"
+    private var paperSide = TradeBias.BUY_CE
+    private var paperEntry = 0.0
+    private var paperQuantity = 0
+    private var paperOpen = false
+    private val paperHistory = mutableListOf<String>()
+    private lateinit var paperStatus: TextView
+    private lateinit var paperHistoryView: TextView
     private lateinit var chart: DemoChart
     private lateinit var tf5: TextView
     private lateinit var tf1: TextView
@@ -165,6 +173,9 @@ class MainActivity : Activity() {
                 addGap(this, 18)
                 section(this, "SIGNAL ALERTS", "NOTIFICATIONS")
                 addView(buildAlerts())
+                addGap(this, 18)
+                section(this, "PAPER TRADING", "MANUAL PRACTICE")
+                addView(buildPaperTrading())
                 addGap(this, 18)
                 addView(text("MGrow   /   MARKET INTELLIGENCE", 10f, muted, true).apply {
                     gravity = Gravity.CENTER
@@ -330,6 +341,120 @@ class MainActivity : Activity() {
             addGap(box, 9)
         }
         box.addView(text("Alerts are inactive until live data and signal logic are connected.", 10f, amber))
+        return box
+    }
+
+
+    private fun buildPaperTrading(): View {
+        val box = card()
+        box.addView(text("Practice trades only • No broker connection", 11f, amber, true))
+        addGap(box, 8)
+
+        val sideRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val ceButton = Button(this).apply {
+            text = "BUY CE"
+            setTextColor(white)
+            setBackgroundColor(Color.rgb(91, 65, 170))
+            setOnClickListener { paperSide = TradeBias.BUY_CE }
+        }
+        val peButton = Button(this).apply {
+            text = "BUY PE"
+            setTextColor(white)
+            setBackgroundColor(Color.rgb(150, 45, 120))
+            setOnClickListener { paperSide = TradeBias.BUY_PE }
+        }
+        sideRow.addView(ceButton, LinearLayout.LayoutParams(0, dp(46), 1f))
+        sideRow.addView(peButton, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(8) })
+        box.addView(sideRow)
+        addGap(box, 8)
+
+        fun field(hint: String, inputType: Int): EditText = EditText(this).apply {
+            this.hint = hint
+            this.inputType = inputType
+            setTextColor(white)
+            setHintTextColor(muted)
+            textSize = 14f
+            setSingleLine(true)
+            background = rounded(Color.argb(150, 25, 23, 43), border, 10)
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+        }
+
+        val entryField = field("Entry premium (e.g. 120.50)", 8194)
+        val qtyField = field("Quantity (units)", 2)
+        val entryRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        entryRow.addView(entryField, LinearLayout.LayoutParams(0, dp(52), 1.4f))
+        entryRow.addView(qtyField, LinearLayout.LayoutParams(0, dp(52), 1f).apply { leftMargin = dp(8) })
+        box.addView(entryRow)
+        addGap(box, 8)
+
+        val openButton = Button(this).apply {
+            text = "SAVE PAPER ENTRY"
+            setOnClickListener {
+                val entry = entryField.text.toString().toDoubleOrNull()
+                val qty = qtyField.text.toString().toIntOrNull()
+                if (paperOpen) {
+                    paperStatus.text = "Close the current practice trade before opening another."
+                    return@setOnClickListener
+                }
+                if (entry == null || entry <= 0.0 || qty == null || qty <= 0) {
+                    paperStatus.text = "Enter a valid premium and quantity."
+                    return@setOnClickListener
+                }
+                paperSide = if (ceButton.isPressed) TradeBias.BUY_CE else paperSide
+                paperEntry = entry
+                paperQuantity = qty
+                paperOpen = true
+                paperStatus.text = "OPEN: ${paperSide.name} • Entry ₹${"%.2f".format(paperEntry)} • Qty $paperQuantity"
+                entryField.isEnabled = false
+                qtyField.isEnabled = false
+                openButton.isEnabled = false
+                closeButton.isEnabled = true
+            }
+        }
+        box.addView(openButton, LinearLayout.LayoutParams(-1, dp(48)))
+        addGap(box, 8)
+
+        val exitField = field("Exit premium (e.g. 135.00)", 8194)
+        box.addView(exitField, LinearLayout.LayoutParams(-1, dp(52)))
+        addGap(box, 8)
+
+        val closeButton = Button(this).apply {
+            text = "CLOSE PAPER TRADE"
+            isEnabled = false
+            setOnClickListener {
+                val exit = exitField.text.toString().toDoubleOrNull()
+                if (!paperOpen) {
+                    paperStatus.text = "There is no open practice trade."
+                    return@setOnClickListener
+                }
+                if (exit == null || exit <= 0.0) {
+                    paperStatus.text = "Enter a valid exit premium."
+                    return@setOnClickListener
+                }
+                val pnl = (exit - paperEntry) * paperQuantity
+                val record = "${paperSide.name} | Entry ₹${"%.2f".format(paperEntry)} | Exit ₹${"%.2f".format(exit)} | Qty $paperQuantity | P&L ₹${"%.2f".format(pnl)}"
+                paperHistory.add(0, record)
+                paperHistoryView.text = paperHistory.take(10).joinToString("\\n")
+                paperStatus.text = "CLOSED • Gross P&L: ₹${"%.2f".format(pnl)} (before charges)"
+                paperOpen = false
+                entryField.isEnabled = true
+                qtyField.isEnabled = true
+                openButton.isEnabled = true
+                closeButton.isEnabled = false
+                exitField.text.clear()
+            }
+        }
+        box.addView(closeButton, LinearLayout.LayoutParams(-1, dp(48)))
+        addGap(box, 8)
+
+        paperStatus = text("No paper trade open.", 12f, muted)
+        box.addView(paperStatus)
+        addGap(box, 10)
+        box.addView(text("RECENT PRACTICE TRADES", 10f, cyan, true))
+        paperHistoryView = text("No trades recorded in this session.", 11f, muted)
+        box.addView(paperHistoryView)
+        addGap(box, 6)
+        box.addView(text("Note: Records are temporary and clear when the app process restarts. P&L is gross, excluding brokerage, taxes and slippage.", 10f, amber))
         return box
     }
 
