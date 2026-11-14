@@ -388,7 +388,8 @@ class MainActivity : Activity() {
         addGap(box, 8)
 
         lateinit var closeButton: Button
-        val openButton = Button(this).apply {
+        lateinit var openButton: Button
+        openButton = Button(this).apply {
             text = "SAVE PAPER ENTRY"
             setOnClickListener {
                 val entry = entryField.text.toString().toDoubleOrNull()
