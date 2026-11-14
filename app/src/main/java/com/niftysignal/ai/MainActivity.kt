@@ -19,16 +19,16 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MainActivity : Activity() {
-    private val bg = Color.rgb(7, 13, 25)
-    private val surface = Color.rgb(16, 26, 43)
-    private val surface2 = Color.rgb(21, 34, 54)
-    private val border = Color.rgb(37, 54, 78)
-    private val muted = Color.rgb(145, 163, 185)
-    private val white = Color.rgb(237, 245, 255)
-    private val green = Color.rgb(46, 230, 153)
-    private val cyan = Color.rgb(65, 205, 255)
+    private val bg = Color.rgb(5, 7, 11)
+    private val surface = Color.rgb(13, 18, 25)
+    private val surface2 = Color.rgb(19, 27, 37)
+    private val border = Color.rgb(39, 53, 64)
+    private val muted = Color.rgb(137, 157, 171)
+    private val white = Color.rgb(239, 247, 249)
+    private val green = Color.rgb(183, 255, 74)
+    private val cyan = Color.rgb(48, 220, 255)
     private val red = Color.rgb(255, 93, 112)
-    private val amber = Color.rgb(255, 190, 84)
+    private val amber = Color.rgb(183, 255, 74)
     private var tf = "5 MIN"
     private lateinit var chart: DemoChart
     private lateinit var tf5: TextView
@@ -107,22 +107,22 @@ class MainActivity : Activity() {
                 section(this, "AI SIGNAL ENGINE", "ANALYSIS")
                 addView(buildSignalCard())
                 addGap(this, 18)
-                section(this, "MARKET CHART", "NIFTY 50")
+                section(this, "LIVE MARKET CHART", "NIFTY 50")
                 addView(buildChartCard())
                 addGap(this, 18)
-                section(this, "TECHNICAL INDICATORS", "LIVE CALCULATION PENDING")
+                section(this, "TECHNICAL ANALYTICS", "LIVE CALCULATION PENDING")
                 addView(buildIndicators())
                 addGap(this, 18)
                 section(this, "MARKET LEVELS", "AUTO DETECTION")
                 addView(buildLevels())
                 addGap(this, 18)
-                section(this, "AI MARKET INSIGHTS", "SMART FILTERS")
+                section(this, "MARKET INTELLIGENCE", "SMART FILTERS")
                 addView(buildInsights())
                 addGap(this, 18)
-                section(this, "SMART ALERTS", "NOTIFICATIONS")
+                section(this, "SIGNAL ALERTS", "NOTIFICATIONS")
                 addView(buildAlerts())
                 addGap(this, 18)
-                addView(text("NIFTY_SIGNAL_AI  •  PERSONAL MARKET ANALYSIS", 10f, muted, true).apply {
+                addView(text("NIFTY_SIGNAL_AI   /   MARKET INTELLIGENCE", 10f, muted, true).apply {
                     gravity = Gravity.CENTER
                     setPadding(0, dp(8), 0, dp(12))
                 })
@@ -140,7 +140,7 @@ class MainActivity : Activity() {
         }
         val titleCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titleCol.addView(text("NIFTY_SIGNAL_AI", 20f, white, true))
-        titleCol.addView(text("AI POWERED MARKET ASSISTANT", 9f, cyan, true))
+        titleCol.addView(text("INTELLIGENT NIFTY MARKET TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         wrap.addView(pill("●  DEMO MODE", amber))
         return wrap
@@ -148,7 +148,7 @@ class MainActivity : Activity() {
 
     private fun buildMarketCard(): View {
         val box = card()
-        box.background = rounded(Color.rgb(13, 31, 48), Color.rgb(37, 91, 112), 20)
+        box.background = rounded(Color.rgb(10, 20, 24), Color.rgb(48, 220, 255), 20)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("NIFTY 50", 13f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(pill("●  FEED OFFLINE", amber))
@@ -167,9 +167,9 @@ class MainActivity : Activity() {
 
     private fun buildSignalCard(): View {
         val box = card()
-        box.background = rounded(Color.rgb(14, 34, 43), Color.rgb(38, 105, 94), 20)
+        box.background = rounded(Color.rgb(11, 23, 19), Color.rgb(183, 255, 74), 20)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        top.addView(text("CURRENT SETUP", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(text("AI MARKET SETUP", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(pill("WAITING FOR LIVE DATA", amber))
         box.addView(top)
         addGap(box, 8)
@@ -182,7 +182,7 @@ class MainActivity : Activity() {
         row.addView(metric("CONFIRMATION", "—", muted), LinearLayout.LayoutParams(0, -2, 1f))
         box.addView(row)
         addGap(box, 8)
-        box.addView(text("No BUY CE / BUY PE recommendation is being generated in demo mode.", 10f, amber))
+        box.addView(text("Signal engine remains safely on standby until verified live data is connected.", 10f, amber))
         return box
     }
 
@@ -192,7 +192,7 @@ class MainActivity : Activity() {
         tf5 = text("5 MIN", 12f, cyan, true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(15), dp(8), dp(15), dp(8))
-            background = rounded(Color.rgb(18, 48, 66), cyan, 12)
+            background = rounded(Color.rgb(15, 39, 43), cyan, 12)
             setOnClickListener { setTf("5 MIN") }
         }
         tf1 = text("1 MIN", 12f, muted, true).apply {
@@ -212,7 +212,7 @@ class MainActivity : Activity() {
         chart = DemoChart()
         box.addView(chart, LinearLayout.LayoutParams(-1, dp(220)))
         addGap(box, 7)
-        box.addView(text("Illustrative candles only • Not connected to market feed", 10f, amber))
+        box.addView(text("SIMULATED PREVIEW  •  LIVE FEED NOT CONNECTED", 10f, amber))
         return box
     }
 
@@ -284,7 +284,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(10), dp(8), dp(10))
-            setBackgroundColor(Color.rgb(12, 21, 36))
+            setBackgroundColor(Color.rgb(8, 12, 17))
         }
         listOf("⌂\nDashboard", "▥\nChart", "✦\nAI Signals", "◷\nAlerts").forEachIndexed { i, label ->
             val color = if (i == 0) cyan else muted
