@@ -1,6 +1,7 @@
 package com.niftysignal.ai
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.graphics.Canvas
 import android.graphics.Color
@@ -62,6 +63,48 @@ class MainActivity : Activity() {
         root.addView(View(this), LinearLayout.LayoutParams(1, dp(h)))
     }
 
+    private fun helpButton(title: String, marathi: String, english: String): TextView =
+        text("ⓘ", 17f, cyan, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(9), dp(2), dp(5), dp(2))
+            contentDescription = "Help: $title"
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("$title  •  मराठी / English")
+                    .setMessage("मराठी:\\n$marathi\\n\\nEnglish:\\n$english")
+                    .setPositiveButton("समजले / Got it", null)
+                    .show()
+            }
+        }
+
+    private fun sectionHelp(title: String): Pair<String, String>? = when (title) {
+        "AI SIGNAL ENGINE" -> Pair(
+            "बाजारातील अटी तपासून BUY CE, BUY PE किंवा WAIT अशी सूचना देणारा विभाग. Live data जोडलेले आणि तपासलेले असेल तेव्हाच सिग्नल वापरायचा.",
+            "Checks market conditions and suggests BUY CE, BUY PE, or WAIT. Use signals only after live data is connected and validated."
+        )
+        "LIVE MARKET CHART" -> Pair(
+            "NIFTY चा कँडल चार्ट पाहण्यासाठी. 5 MIN मुख्य ट्रेंडसाठी आणि 1 MIN entry confirmation साठी आहे. सध्या हा फक्त sample preview आहे.",
+            "Displays NIFTY candles. Use 5 MIN for the main trend and 1 MIN for entry confirmation. This is currently a sample preview only."
+        )
+        "TECHNICAL ANALYTICS" -> Pair(
+            "VWAP, EMA आणि RSI सारखे indicators बाजाराची दिशा व momentum समजण्यास मदत करतात. आकडे Live Data जोडल्यावरच दिसतील.",
+            "VWAP, EMA, and RSI help assess market direction and momentum. Values will appear only after live data is connected."
+        )
+        "MARKET LEVELS" -> Pair(
+            "Support, Resistance, CPR आणि मागील दिवसाचे High/Low हे संभाव्य किंमत अडथळे किंवा आधार दाखवतात. हे निश्चित भाव नसतात.",
+            "Support, resistance, CPR, and previous-day high/low show possible price reaction areas. They are not guaranteed levels."
+        )
+        "MARKET INTELLIGENCE" -> Pair(
+            "Volume, trend strength आणि false breakout filters वापरून कमकुवत किंवा खोटे breakout ओळखण्यास मदत होते.",
+            "Uses volume, trend-strength, and false-breakout filters to help assess whether a breakout may be weak or unreliable."
+        )
+        "SIGNAL ALERTS" -> Pair(
+            "निवडलेल्या market conditions पूर्ण झाल्यावर सूचना मिळवण्यासाठी. Live data आणि alert logic जोडल्यावरच alerts सुरू होतील.",
+            "Notifies you when selected market conditions occur. Alerts will activate only after live data and alert logic are connected."
+        )
+        else -> null
+    }
+
     private fun section(root: LinearLayout, title: String, subtitle: String? = null) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -69,6 +112,7 @@ class MainActivity : Activity() {
         }
         row.addView(text(title, 16f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
         if (subtitle != null) row.addView(text(subtitle, 10f, muted, true))
+        sectionHelp(title)?.let { row.addView(helpButton(title, it.first, it.second)) }
         root.addView(row)
         addGap(root, 8)
     }
@@ -151,6 +195,7 @@ class MainActivity : Activity() {
         box.background = rounded(Color.rgb(10, 20, 24), Color.rgb(48, 220, 255), 20)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("NIFTY 50", 13f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(helpButton("NIFTY 50", "NIFTY 50 हा भारतातील प्रमुख 50 कंपन्यांचा निर्देशांक आहे. हा कार्ड Live Index किंमत, बदल, Day High आणि Day Low दाखवेल. सध्या Feed Offline आहे.", "NIFTY 50 is an index of 50 major Indian companies. This card will show the live index value, change, day high, and day low. The feed is currently offline."))
         top.addView(pill("●  FEED OFFLINE", amber))
         box.addView(top)
         addGap(box, 10)
@@ -170,6 +215,7 @@ class MainActivity : Activity() {
         box.background = rounded(Color.rgb(11, 23, 19), Color.rgb(183, 255, 74), 20)
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(text("AI MARKET SETUP", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(helpButton("BUY CE / BUY PE / WAIT", "BUY CE म्हणजे Call Option खरेदीचा विचार; BUY PE म्हणजे Put Option खरेदीचा विचार; WAIT म्हणजे सध्या स्पष्ट setup नाही. ही सूचना आहे, ऑर्डर नाही. स्वतः तपासूनच ट्रेड घ्या.", "BUY CE suggests considering a Call option; BUY PE suggests considering a Put option; WAIT means there is no clear setup. This is an analysis suggestion, not an order. Verify independently before trading."))
         top.addView(pill("WAITING FOR LIVE DATA", amber))
         box.addView(top)
         addGap(box, 8)
@@ -206,6 +252,7 @@ class MainActivity : Activity() {
         tfRow.addView(spacer, LinearLayout.LayoutParams(dp(8), 1))
         tfRow.addView(tf1)
         tfRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        tfRow.addView(helpButton("5 MIN / 1 MIN", "5 MIN चार्ट मुख्य trend पाहण्यासाठी वापर. 1 MIN चार्टवर entry आधी छोटा confirmation तपास. दोन्ही chart सध्या sample आहेत.", "Use the 5 MIN chart to assess the main trend. Check the 1 MIN chart for short-term confirmation before entry. Both charts are currently samples."))
         tfRow.addView(pill("SAMPLE CHART", amber))
         box.addView(tfRow)
         addGap(box, 10)
@@ -227,6 +274,13 @@ class MainActivity : Activity() {
         rows.forEachIndexed { i, item ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             row.addView(text(item.first, 13f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+            val indicatorHelp = when (item.first) {
+                "VWAP" -> Pair("VWAP म्हणजे दिवसभरातील volume नुसार मोजलेली सरासरी किंमत. किंमत VWAP च्या वर/खाली आहे का ते trend समजण्यासाठी पाहतात.", "VWAP is the volume-weighted average price for the session. Traders compare price with VWAP to assess intraday direction.")
+                "EMA 9" -> Pair("EMA 9 हा अलीकडील 9 candles च्या किमतींना जास्त महत्त्व देणारा moving average आहे. तो अल्पकालीन trend दाखवतो.", "EMA 9 is a moving average that gives more weight to recent prices across 9 periods. It helps show short-term direction.")
+                "EMA 21" -> Pair("EMA 21 हा 21 periods चा moving average आहे. EMA 9 सोबत तुलना करून trend समजण्यास मदत होते.", "EMA 21 is a 21-period moving average. Comparing it with EMA 9 can help assess the trend.")
+                else -> Pair("RSI (14) हा momentum indicator आहे. साधारण 70 पेक्षा वर overbought आणि 30 पेक्षा खाली oversold स्थितीचा संकेत असू शकतो; एकट्या RSI वर ट्रेड घेऊ नये.", "RSI (14) is a momentum indicator. Readings above 70 may indicate overbought and below 30 may indicate oversold conditions; do not trade using RSI alone.")
+            }
+            row.addView(helpButton(item.first, indicatorHelp.first, indicatorHelp.second))
             row.addView(text(item.second, 14f, item.third, true))
             box.addView(row)
             if (i != rows.lastIndex) {
