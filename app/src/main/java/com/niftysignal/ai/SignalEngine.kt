@@ -4,23 +4,12 @@ package com.niftysignal.ai
  * Strategy calculations are deliberately independent from any broker/feed.
  * A future Upstox adapter can supply validated candles without changing this engine.
  */
-data class MarketCandle(
-    val open: Double,
-    val high: Double,
-    val low: Double,
-    val close: Double,
-    val volume: Double,
-    val timestampMillis: Long
-)
-
 data class IndicatorSnapshot(
     val vwap: Double?,
     val ema9: Double?,
     val ema21: Double?,
     val rsi14: Double?
 )
-
-enum class TradeBias { BUY_CE, BUY_PE, WAIT }
 
 data class SignalDecision(
     val bias: TradeBias,
