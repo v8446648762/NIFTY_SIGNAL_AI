@@ -1,6 +1,8 @@
 package com.niftysignal.ai
 
-import android.app.Activity
+import androidx.fragment.app.FragmentActivity
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -29,7 +31,70 @@ import android.widget.TextView
 import kotlin.math.max
 import kotlin.math.min
 
-class MainActivity : Activity() {
+class MainActivity : FragmentActivity() {
+    private var appUnlocked = false
+    private var authenticationInProgress = false
+
+    private fun isAppLockEnabled(): Boolean =
+        getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
+
+    override fun onResume() {
+        super.onResume()
+        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress) {
+            authenticateAppLock()
+        }
+    }
+
+    override fun onStop() {
+        if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
+        super.onStop()
+    }
+
+    private fun authenticateAppLock() {
+        if (authenticationInProgress || appUnlocked || !isAppLockEnabled()) return
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        if (!keyguard.isDeviceSecure) {
+            getSharedPreferences("mgrow_settings", MODE_PRIVATE).edit()
+                .putBoolean("app_lock_enabled", false).apply()
+            appUnlocked = true
+            Toast.makeText(this, "Set a phone PIN, pattern or password to use App Lock.", Toast.LENGTH_LONG).show()
+            return
+        }
+        authenticationInProgress = true
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    authenticationInProgress = false
+                    appUnlocked = true
+                }
+
+                override fun onAuthenticationFailed() {
+                    Toast.makeText(this@MainActivity, "Fingerprint not recognized. Try again.", Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    authenticationInProgress = false
+                    Toast.makeText(this@MainActivity, "MGrow locked: $errString", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+            }
+        )
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock MGrow")
+            .setSubtitle("Verify your identity to access your market dashboard")
+            .setDescription("Use fingerprint, face unlock, or your phone screen lock.")
+            .setDeviceCredentialAllowed(true)
+            .build()
+        try {
+            prompt.authenticate(promptInfo)
+        } catch (error: Exception) {
+            authenticationInProgress = false
+            Toast.makeText(this, "Biometric lock is unavailable on this device.", Toast.LENGTH_LONG).show()
+            finish()
+        }
+    }
     @Suppress("DEPRECATION")
     private fun showMarketNotification(title: String, message: String, notificationId: Int) {
         val channelId = "mgrow_market_alerts"
@@ -768,6 +833,36 @@ class MainActivity : Activity() {
         addGap(root, 12)
         section(root, if (isMarathi()) "सूचना आणि अलर्ट" else "NOTIFICATIONS & ALERTS")
         root.addView(buildAlerts())
+        addGap(root, 12)
+        section(root, if (isMarathi()) "सुरक्षा / SECURITY" else "SECURITY")
+        val appLock = Switch(this).apply {
+            text = if (isMarathi()) "फिंगरप्रिंट / बायोमेट्रिक App Lock" else "Fingerprint / Biometric App Lock"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("app_lock_enabled", false)
+            setOnCheckedChangeListener { _, checked ->
+                if (checked) {
+                    val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+                    if (!keyguard.isDeviceSecure) {
+                        isChecked = false
+                        Toast.makeText(this@MainActivity, "First set a phone PIN, pattern or password in Android Settings.", Toast.LENGTH_LONG).show()
+                    } else {
+                        prefs.edit().putBoolean("app_lock_enabled", true).apply()
+                        appUnlocked = false
+                        authenticateAppLock()
+                    }
+                } else {
+                    prefs.edit().putBoolean("app_lock_enabled", false).apply()
+                    appUnlocked = true
+                    authenticationInProgress = false
+                }
+            }
+        }
+        root.addView(appLock)
+        root.addView(text(
+            if (isMarathi()) "App background मध्ये गेल्यावर पुन्हा लॉक होईल. Fingerprint/Face किंवा फोनचा PIN वापरता येईल." else
+                "MGrow locks again when you leave the app. Unlock with fingerprint/face or your phone PIN, pattern or password.",
+            10f, muted
+        ))
         addGap(root, 12)
         section(root, if (isMarathi()) "इतर पर्याय" else "OTHER OPTIONS")
         val keepAwake = Switch(this).apply {
