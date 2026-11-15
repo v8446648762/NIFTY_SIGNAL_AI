@@ -713,18 +713,54 @@ class MainActivity : FragmentActivity() {
         addGap(root, 18)
 
         fun feature(title: String, detail: String, symbol: String, destination: String): LinearLayout {
+            val glass = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
+                .getString("theme", "Midnight") == "Blue Glass"
+            val iconColor = if (glass) Color.rgb(104, 205, 255) else cyan
             return LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(14), dp(12), dp(14))
-                minimumHeight = dp(104)
-                background = rounded(Color.rgb(29, 43, 67), Color.argb(125, 75, 101, 139), 18)
+                minimumHeight = dp(112)
+                background = if (glass) {
+                    GradientDrawable(
+                        GradientDrawable.Orientation.TL_BR,
+                        intArrayOf(Color.argb(242, 38, 65, 103), Color.argb(224, 24, 42, 70))
+                    ).apply {
+                        cornerRadius = dp(22).toFloat()
+                        setStroke(dp(1), Color.argb(190, 105, 174, 235))
+                    }
+                } else rounded(surface, border, 18)
+                elevation = if (glass) dp(7).toFloat() else dp(2).toFloat()
                 isClickable = true
                 isFocusable = true
                 contentDescription = "$title. $detail"
                 setOnClickListener { showPage(destination) }
-                addView(text("$symbol  $title", 16f, white, true))
-                addView(View(this@MainActivity), LinearLayout.LayoutParams(1, dp(7)))
+
+                val titleRow = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                val iconChip = TextView(this@MainActivity).apply {
+                    text = symbol
+                    textSize = 21f
+                    gravity = Gravity.CENTER
+                    setTextColor(iconColor)
+                    typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                    background = GradientDrawable(
+                        GradientDrawable.Orientation.TL_BR,
+                        intArrayOf(Color.argb(115, 40, 145, 220), Color.argb(90, 91, 91, 205))
+                    ).apply {
+                        cornerRadius = dp(13).toFloat()
+                        setStroke(dp(1), Color.argb(145, 105, 190, 255))
+                    }
+                    layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply {
+                        rightMargin = dp(9)
+                    }
+                }
+                titleRow.addView(iconChip)
+                titleRow.addView(text(title, 15f, white, true))
+                addView(titleRow)
+                addView(View(this@MainActivity), LinearLayout.LayoutParams(1, dp(8)))
                 addView(text(detail, 12f, muted))
             }
         }
@@ -741,16 +777,16 @@ class MainActivity : FragmentActivity() {
         }
 
         addFeatureRow(
-            feature("Market Overview", "Price, Trend, Chart", "⌁", "Chart"),
-            feature("AI Signals", "CE / PE / WAIT", "▣", "AI")
+            feature("Market Overview", "Price, Trend, Chart", "↗", "Chart"),
+            feature("AI Signals", "CE / PE / WAIT", "✦", "AI")
         )
         addFeatureRow(
-            feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "▥", "Tools"),
-            feature("Option Chain", "Planned after data integration", "☷", "Chart")
+            feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "⌁", "Tools"),
+            feature("Option Chain", "Planned after data integration", "⛓", "Chart")
         )
         addFeatureRow(
-            feature("AI Intelligence", "Filters activate with live candles", "✧", "AI"),
-            feature("Risk Manager", "Risk score • Live data required", "◇", "AI")
+            feature("AI Intelligence", "Filters activate with live candles", "◎", "AI"),
+            feature("Risk Manager", "Risk score • Live data required", "⬡", "AI")
         )
         addFeatureRow(
             feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts"),
