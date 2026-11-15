@@ -10,7 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      MGROW_KEYSTORE_PATH: ${{ runner.temp }}/mgrow-release.jks
       MGROW_KEYSTORE_PASSWORD: ${{ secrets.MGROW_KEYSTORE_PASSWORD }}
       MGROW_KEY_ALIAS: ${{ secrets.MGROW_KEY_ALIAS }}
       MGROW_KEY_PASSWORD: ${{ secrets.MGROW_KEY_PASSWORD }}
@@ -29,6 +28,7 @@ jobs:
         id: signing
         env:
           MGROW_KEYSTORE_BASE64: ${{ secrets.MGROW_KEYSTORE_BASE64 }}
+          MGROW_KEYSTORE_PATH: ${{ runner.temp }}/mgrow-release.jks
         run: |
           if [ -n "$MGROW_KEYSTORE_BASE64" ] && [ -n "$MGROW_KEYSTORE_PASSWORD" ] && [ -n "$MGROW_KEY_ALIAS" ] && [ -n "$MGROW_KEY_PASSWORD" ]; then
             printf '%s' "$MGROW_KEYSTORE_BASE64" | base64 --decode > "$MGROW_KEYSTORE_PATH"
@@ -49,6 +49,8 @@ jobs:
 
       - name: Build permanently signed release APK
         if: steps.signing.outputs.ready == 'true'
+        env:
+          MGROW_KEYSTORE_PATH: ${{ runner.temp }}/mgrow-release.jks
         run: gradle :app:assembleRelease
 
       - name: Generate debug APK checksum
