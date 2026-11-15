@@ -487,6 +487,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawableResource(R.drawable.mgrow_splash)
         applySavedAppearance()
         window.statusBarColor = bg
         window.navigationBarColor = bg
