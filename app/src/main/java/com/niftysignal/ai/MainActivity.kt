@@ -450,15 +450,7 @@ class MainActivity : Activity() {
         pageContent.removeAllViews()
         when (page) {
             "Home" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 16)
-                pageContent.addView(buildMarketCard())
-                addGap(pageContent, 18)
-                section(pageContent, "AI SIGNAL ENGINE", "ANALYSIS")
-                pageContent.addView(buildSignalCard())
-                addGap(pageContent, 18)
-                section(pageContent, "AI TRADE RISK METER", "LIVE RISK SCORE")
-                pageContent.addView(buildRiskMeter())
+                pageContent.addView(buildHomeDashboard())
             }
             "Chart" -> {
                 pageContent.addView(buildHeader())
@@ -578,6 +570,71 @@ class MainActivity : Activity() {
             tile("SIGNAL ALERTS", "NOTIFICATIONS", buildAlerts())
         )
         return outer
+    }
+
+    private fun buildHomeDashboard(): View {
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        brandRow.addView(text("MGrow AI", 21f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
+        brandRow.addView(pill("Dashboard", green))
+        root.addView(brandRow)
+        addGap(root, 22)
+        root.addView(text("NIFTY 50", 29f, white, true))
+        addGap(root, 5)
+        root.addView(text("Market Overview  •  Live data जोडल्यावर अपडेट", 13f, muted, true))
+        addGap(root, 18)
+
+        fun feature(title: String, detail: String, symbol: String, destination: String): LinearLayout {
+            return LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(14), dp(12), dp(14))
+                minimumHeight = dp(104)
+                background = rounded(Color.rgb(29, 43, 67), Color.argb(125, 75, 101, 139), 18)
+                isClickable = true
+                isFocusable = true
+                contentDescription = "$title. $detail"
+                setOnClickListener { showPage(destination) }
+                addView(text("$symbol  $title", 16f, white, true))
+                addGap(this@MainActivity.run { this }, 7)
+                addView(text(detail, 12f, muted))
+            }
+        }
+
+        fun addFeatureRow(left: View, right: View) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            row.addView(left, LinearLayout.LayoutParams(0, -1, 1f).apply { rightMargin = dp(7) })
+            row.addView(right, LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = dp(7) })
+            root.addView(row)
+            addGap(root, 10)
+        }
+
+        addFeatureRow(
+            feature("Market Overview", "Price, Trend, Chart", "⌁", "Chart"),
+            feature("AI Signals", "CE / PE / WAIT", "▣", "AI")
+        )
+        addFeatureRow(
+            feature("Technical Analysis", "VWAP, EMA, RSI", "▥", "Tools"),
+            feature("Option Chain", "OI, PCR, CE / PE", "☷", "Chart")
+        )
+        addFeatureRow(
+            feature("AI Intelligence", "Price Action, Structure", "✧", "AI"),
+            feature("Risk Manager", "Risk %, SL, Targets", "◇", "AI")
+        )
+        addFeatureRow(
+            feature("Alerts", "Smart Notifications", "♧", "Alerts"),
+            feature("Trading Journal", "Trade History", "▤", "Tools")
+        )
+        val note = text("Select a card or use the bottom navigation to open each section.", 11f, muted, true)
+        note.gravity = Gravity.CENTER
+        root.addView(note)
+        return root
     }
 
     private fun buildHeader(): View {
@@ -818,7 +875,6 @@ class MainActivity : Activity() {
                     }
                 } else {
                     showMarketNotification(
-                        this@MainActivity,
                         "MGrow notification test",
                         "Phone notifications are working. Market alerts will activate after live data and alert rules are connected.",
                         9001
