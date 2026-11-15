@@ -429,11 +429,28 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            fitsSystemWindows = true
+            fitsSystemWindows = false
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(bg, surface2, Color.rgb(36, 27, 70))
             )
+            // Keep content and the bottom navigation clear of Android system bars,
+            // including gesture navigation and Android 15 edge-to-edge layouts.
+            setOnApplyWindowInsetsListener { view, insets ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars())
+                    view.setPadding(0, bars.top, 0, bars.bottom)
+                } else {
+                    @Suppress("DEPRECATION")
+                    view.setPadding(
+                        0,
+                        insets.systemWindowInsetTop,
+                        0,
+                        insets.systemWindowInsetBottom
+                    )
+                }
+                insets
+            }
         }
         val scroll = ScrollView(this).apply {
             clipToPadding = false
@@ -445,6 +462,7 @@ class MainActivity : Activity() {
         bottomNav = LinearLayout(this)
         root.addView(bottomNav, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
+        root.requestApplyInsets()
         showPage("Home")
     }
 
