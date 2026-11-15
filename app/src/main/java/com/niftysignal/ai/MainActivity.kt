@@ -507,8 +507,8 @@ class MainActivity : Activity() {
             Triple("Home", "⌂", "Home"),
             Triple("Chart", "▥", "Chart"),
             Triple("AI", "✦", "AI"),
-            Triple("Tools", "⚙", "Tools"),
-            Triple("Alerts", "♢", "Alerts")
+            Triple("Alerts", "♧", "Alerts"),
+            Triple("Tools", "⚙", "Tools")
         )
         items.forEach { item ->
             val selected = currentPage == item.first
@@ -599,7 +599,7 @@ class MainActivity : Activity() {
                 contentDescription = "$title. $detail"
                 setOnClickListener { showPage(destination) }
                 addView(text("$symbol  $title", 16f, white, true))
-                addGap(this@MainActivity.run { this }, 7)
+                this@MainActivity.addGap(this, 7)
                 addView(text(detail, 12f, muted))
             }
         }
@@ -609,8 +609,8 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.TOP
             }
-            row.addView(left, LinearLayout.LayoutParams(0, -1, 1f).apply { rightMargin = dp(7) })
-            row.addView(right, LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = dp(7) })
+            row.addView(left, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(7) })
+            row.addView(right, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(7) })
             root.addView(row)
             addGap(root, 10)
         }
