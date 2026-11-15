@@ -1,14 +1,16 @@
 package com.niftysignal.ai
 
 /**
- * Strategy calculations are deliberately independent from any broker/feed.
- * A future Upstox adapter can supply validated candles without changing this engine.
+ * Dashboard-facing signal engine. It has no dependency on a broker or network.
+ * All decisions reuse the validated candle rules in TechnicalAnalysis.
  */
 data class IndicatorSnapshot(
     val vwap: Double?,
     val ema9: Double?,
     val ema21: Double?,
-    val rsi14: Double?
+    val rsi14: Double?,
+    val support: Double?,
+    val resistance: Double?
 )
 
 data class SignalDecision(
@@ -16,21 +18,23 @@ data class SignalDecision(
     val trend: String,
     val reasons: List<String>,
     val indicators: IndicatorSnapshot,
-    val setupScore: Int
+    val confirmed: Boolean
 )
 
 object SignalEngine {
     fun calculate(candles: List<MarketCandle>): IndicatorSnapshot {
-        if (candles.isEmpty()) return IndicatorSnapshot(null, null, null, null)
-        val totalVolume = candles.sumOf { it.volume.coerceAtLeast(0.0) }
-        val vwap = if (totalVolume > 0.0) {
-            candles.sumOf { ((it.high + it.low + it.close) / 3.0) * it.volume.coerceAtLeast(0.0) } / totalVolume
-        } else null
+        if (candles.isEmpty() || candles.any { !isValid(it) }) {
+            return IndicatorSnapshot(null, null, null, null, null, null)
+        }
+        val closes = candles.map { it.close }
+        val recent = candles.takeLast(20)
         return IndicatorSnapshot(
-            vwap = vwap,
-            ema9 = ema(candles.map { it.close }, 9),
-            ema21 = ema(candles.map { it.close }, 21),
-            rsi14 = rsi(candles.map { it.close }, 14)
+            vwap = TechnicalAnalysis.sessionVwap(candles),
+            ema9 = TechnicalAnalysis.ema(closes, 9),
+            ema21 = TechnicalAnalysis.ema(closes, 21),
+            rsi14 = TechnicalAnalysis.rsi(closes, 14),
+            support = recent.minOfOrNull { it.low },
+            resistance = recent.maxOfOrNull { it.high }
         )
     }
 
@@ -38,95 +42,46 @@ object SignalEngine {
         fiveMinuteCandles: List<MarketCandle>,
         oneMinuteCandles: List<MarketCandle>
     ): SignalDecision {
-        val indicators = calculate(fiveMinuteCandles)
+        val technical = TechnicalAnalysis.analyze(fiveMinuteCandles, oneMinuteCandles)
+        val indicators = IndicatorSnapshot(
+            vwap = technical.vwap,
+            ema9 = technical.ema9,
+            ema21 = technical.ema21,
+            rsi14 = technical.rsi14,
+            support = technical.support,
+            resistance = technical.resistance
+        )
         val latest = fiveMinuteCandles.lastOrNull()
-        val confirm = oneMinuteCandles.takeLast(3)
-        if (latest == null || indicators.vwap == null || indicators.ema9 == null ||
-            indicators.ema21 == null || indicators.rsi14 == null || confirm.size < 3
-        ) {
-            return SignalDecision(
-                TradeBias.WAIT, "INSUFFICIENT DATA",
-                listOf("Need sufficient 5-minute history and 1-minute confirmation candles."),
-                indicators, 0
-            )
-        }
-
-        val priceAboveVwap = latest.close > indicators.vwap
-        val priceBelowVwap = latest.close < indicators.vwap
-        val bullishEma = indicators.ema9 > indicators.ema21
-        val bearishEma = indicators.ema9 < indicators.ema21
-        val bullishRsi = indicators.rsi14 > 55.0
-        val bearishRsi = indicators.rsi14 < 45.0
-        val oneMinBullish = confirm.last().close > confirm.last().open &&
-            confirm.last().close > confirm.first().close
-        val oneMinBearish = confirm.last().close < confirm.last().open &&
-            confirm.last().close < confirm.first().close
-
-        val bullChecks = listOf(priceAboveVwap, bullishEma, bullishRsi, oneMinBullish)
-        val bearChecks = listOf(priceBelowVwap, bearishEma, bearishRsi, oneMinBearish)
-        val bullScore = bullChecks.count { it } * 25
-        val bearScore = bearChecks.count { it } * 25
-
-        val reasons = mutableListOf<String>()
-        val bias = when {
-            bullChecks.all { it } -> {
-                reasons += listOf("Price above VWAP", "EMA 9 above EMA 21", "RSI above 55", "1-minute bullish confirmation")
-                TradeBias.BUY_CE
-            }
-            bearChecks.all { it } -> {
-                reasons += listOf("Price below VWAP", "EMA 9 below EMA 21", "RSI below 45", "1-minute bearish confirmation")
-                TradeBias.BUY_PE
-            }
-            else -> {
-                if (priceAboveVwap) reasons += "Price above VWAP"
-                if (priceBelowVwap) reasons += "Price below VWAP"
-                if (bullishEma) reasons += "EMA 9 above EMA 21"
-                if (bearishEma) reasons += "EMA 9 below EMA 21"
-                if (bullishRsi) reasons += "RSI above 55"
-                if (bearishRsi) reasons += "RSI below 45"
-                reasons += "Conditions are mixed; wait for confirmation"
-                TradeBias.WAIT
-            }
+        val trend = when {
+            latest == null || indicators.vwap == null ||
+                indicators.ema9 == null || indicators.ema21 == null -> "INSUFFICIENT DATA"
+            latest.close > indicators.vwap && indicators.ema9 > indicators.ema21 -> "BULLISH"
+            latest.close < indicators.vwap && indicators.ema9 < indicators.ema21 -> "BEARISH"
+            else -> "SIDEWAYS / MIXED"
         }
         return SignalDecision(
-            bias,
-            when { bullishEma && priceAboveVwap -> "BULLISH"; bearishEma && priceBelowVwap -> "BEARISH"; else -> "SIDEWAYS / MIXED" },
-            reasons,
-            indicators,
-            maxOf(bullScore, bearScore)
+            bias = technical.bias,
+            trend = trend,
+            reasons = listOf(technical.reason),
+            indicators = indicators,
+            confirmed = technical.bias != TradeBias.WAIT
         )
     }
 
-    private fun ema(values: List<Double>, period: Int): Double? {
-        if (values.size < period) return null
-        val multiplier = 2.0 / (period + 1.0)
-        var result = values.take(period).average()
-        for (value in values.drop(period)) result = (value * multiplier) + (result * (1.0 - multiplier))
-        return result
-    }
-
-    private fun rsi(values: List<Double>, period: Int): Double? {
-        if (values.size <= period) return null
-        var gains = 0.0
-        var losses = 0.0
-        for (i in 1..period) {
-            val change = values[i] - values[i - 1]
-            if (change >= 0) gains += change else losses -= change
-        }
-        var avgGain = gains / period
-        var avgLoss = losses / period
-        for (i in (period + 1) until values.size) {
-            val change = values[i] - values[i - 1]
-            avgGain = (avgGain * (period - 1) + maxOf(change, 0.0)) / period
-            avgLoss = (avgLoss * (period - 1) + maxOf(-change, 0.0)) / period
-        }
-        if (avgLoss == 0.0) return if (avgGain == 0.0) 50.0 else 100.0
-        val rs = avgGain / avgLoss
-        return 100.0 - (100.0 / (1.0 + rs))
+    private fun isValid(candle: MarketCandle): Boolean {
+        val values = listOf(
+            candle.open, candle.high, candle.low, candle.close, candle.volume
+        )
+        return values.all { it.isFinite() } &&
+            candle.open > 0.0 && candle.high > 0.0 &&
+            candle.low > 0.0 && candle.close > 0.0 &&
+            candle.volume >= 0.0 &&
+            candle.high >= maxOf(candle.open, candle.close, candle.low) &&
+            candle.low <= minOf(candle.open, candle.close, candle.high)
     }
 }
 
-/** Manual, offline paper-trade record. Quantity is user-entered units, never auto-sized. */
+/** Manual, offline paper-trade record. Quantity is user-entered units only. */
 data class PaperTrade(
     val side: TradeBias,
     val entryPremium: Double,
@@ -137,9 +92,9 @@ data class PaperTrade(
 ) {
     init {
         require(side == TradeBias.BUY_CE || side == TradeBias.BUY_PE)
-        require(entryPremium > 0.0)
+        require(entryPremium.isFinite() && entryPremium > 0.0)
         require(quantity > 0)
-        require(exitPremium == null || exitPremium > 0.0)
+        require(exitPremium == null || (exitPremium.isFinite() && exitPremium > 0.0))
     }
 
     val isOpen: Boolean get() = exitPremium == null
