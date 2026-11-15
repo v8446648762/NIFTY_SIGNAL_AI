@@ -2,7 +2,16 @@ package com.niftysignal.ai
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.widget.Switch
+import android.widget.Toast
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -643,17 +652,89 @@ class MainActivity : Activity() {
 
     private fun buildAlerts(): View {
         val box = card()
-        listOf("CE / PE setup alert", "VWAP breakout alert", "EMA crossover alert", "Trend reversal alert").forEach {
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            row.addView(text(it, 12f, white), LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(pill("INACTIVE", muted))
+        box.addView(text("NOTIFICATION SETTINGS", 10f, cyan, true))
+        addGap(box, 6)
+
+        fun alertSwitch(label: String, key: String) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(text(label, 12f, white), LinearLayout.LayoutParams(0, -2, 1f))
+            val toggle = Switch(this).apply {
+                isChecked = getSharedPreferences("mgrow_alerts", MODE_PRIVATE)
+                    .getBoolean(key, false)
+                setOnCheckedChangeListener { _, checked ->
+                    getSharedPreferences("mgrow_alerts", MODE_PRIVATE).edit()
+                        .putBoolean(key, checked).apply()
+                }
+            }
+            row.addView(toggle)
             box.addView(row)
-            addGap(box, 9)
+            addGap(box, 5)
         }
-        box.addView(text("Alerts are inactive until live data and signal logic are connected.", 10f, amber))
+
+        alertSwitch("Enable all notifications", "enabled")
+        View(this).also {
+            it.setBackgroundColor(border)
+            box.addView(it, LinearLayout.LayoutParams(-1, dp(1)))
+        }
+        addGap(box, 7)
+        alertSwitch("CE / PE setup confirmed", "setup")
+        alertSwitch("VWAP breakout", "vwap")
+        alertSwitch("EMA 9 / 21 crossover", "ema")
+        alertSwitch("Trend reversal", "reversal")
+        alertSwitch("1-minute retest confirmation", "retest")
+
+        val permissionButton = Button(this).apply {
+            text = if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) "ALLOW PHONE NOTIFICATIONS" else "NOTIFICATION PERMISSION READY"
+            setOnClickListener {
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 301)
+                } else {
+                    Toast.makeText(this@MainActivity, "Notification permission is ready.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        box.addView(permissionButton, LinearLayout.LayoutParams(-1, dp(46)))
+        addGap(box, 6)
+
+        val testButton = Button(this).apply {
+            text = "SEND TEST NOTIFICATION"
+            setOnClickListener {
+                val enabled = getSharedPreferences("mgrow_alerts", MODE_PRIVATE)
+                    .getBoolean("enabled", false)
+                val permissionGranted = Build.VERSION.SDK_INT < 33 ||
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                if (!enabled) {
+                    Toast.makeText(this@MainActivity, "First enable notifications above.", Toast.LENGTH_SHORT).show()
+                } else if (!permissionGranted) {
+                    Toast.makeText(this@MainActivity, "Allow notification permission first.", Toast.LENGTH_SHORT).show()
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 301)
+                    }
+                } else {
+                    AlertNotifications.show(
+                        this@MainActivity,
+                        "MGrow notification test",
+                        "Phone notifications are working. Market alerts will activate after live data and alert rules are connected.",
+                        9001
+                    )
+                }
+            }
+        }
+        box.addView(testButton, LinearLayout.LayoutParams(-1, dp(46)))
+        addGap(box, 6)
+        box.addView(text(
+            "Alert preferences are saved on this phone. Market-triggered alerts will activate after FYERS live data and signal conditions are connected. No orders are placed.",
+            10f, amber
+        ))
         return box
     }
-
 
     // Risk score is a weighted assessment of adverse conditions, not a win probability.
     // Category inputs are normalized from 0 (low risk) to 100 (high risk) after live data integration.
