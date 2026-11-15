@@ -4,24 +4,24 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Transparent canvas: metallic ring and premium MGrow bull mark -->
-    <path android:fillColor="#00000000" android:pathData="M0,0h108v108h-108z"/>
-    <path android:fillColor="#101820" android:fillAlpha="0.92" android:pathData="M54,4 C81,4 104,26 104,54 C104,82 81,104 54,104 C27,104 4,82 4,54 C4,26 27,4 54,4 Z"/>
-    <path android:fillColor="#00000000" android:strokeColor="#30DCFF" android:strokeWidth="1.8" android:pathData="M54,5 C81,5 103,27 103,54 C103,81 81,103 54,103 C27,103 5,81 5,54 C5,27 27,5 54,5 Z"/>
-    <path android:fillColor="#00000000" android:strokeColor="#B7FF4A" android:strokeWidth="1.2" android:pathData="M54,9 C79,9 99,29 99,54"/>
-    <!-- horns -->
-    <path android:fillColor="#B7FF4A" android:pathData="M35,27 C25,27 20,20 19,13 C27,19 32,18 40,17 C36,21 35,24 35,27 Z"/>
-    <path android:fillColor="#30DCFF" android:pathData="M73,27 C83,27 88,20 89,13 C81,19 76,18 68,17 C72,21 73,24 73,27 Z"/>
-    <!-- bull head -->
-    <path android:fillColor="#0A1119" android:strokeColor="#30DCFF" android:strokeWidth="1.5" android:pathData="M34,25 C40,19 47,19 54,21 C61,19 68,19 74,25 L70,42 C68,55 62,65 54,70 C46,65 40,55 38,42 Z"/>
-    <path android:fillColor="#B7FF4A" android:pathData="M38,29 C43,24 48,24 54,26 C60,24 65,24 70,29 L66,43 C64,53 60,60 54,65 C48,60 44,53 42,43 Z"/>
-    <path android:fillColor="#071019" android:pathData="M41,39 L50,42 L45,46 Z M67,39 L58,42 L63,46 Z"/>
-    <path android:fillColor="#30DCFF" android:pathData="M46,53 Q54,48 62,53 L60,59 Q54,63 48,59 Z"/>
-    <!-- upward growth arrow -->
-    <path android:fillColor="#30DCFF" android:pathData="M12,83 L30,66 L40,72 L58,53 L63,58 L41,80 L31,74 L17,88 Z"/>
-    <path android:fillColor="#B7FF4A" android:pathData="M57,52 L74,48 L69,65 Z"/>
-    <!-- compact MG monogram / rising bars -->
-    <path android:fillColor="#EAF4F8" android:pathData="M17,91 L17,82 L24,82 L31,89 L38,82 L45,82 L45,91 L39,91 L39,88 L31,95 L23,88 L23,91 Z"/>
-    <path android:fillColor="#30DCFF" android:pathData="M48,82 L66,82 L66,87 L54,87 L54,90 L64,90 L64,95 L48,95 Z"/>
-    <path android:fillColor="#B7FF4A" android:pathData="M72,91h5v5h-5z M80,85h5v11h-5z M88,78h5v18h-5z"/>
+    <!-- Interlocking helping-hand / growth mark. Transparent canvas. -->
+    <path
+        android:fillColor="#D92BE8"
+        android:pathData="M17,27 C18,17 24,12 31,14 C36,15 38,21 38,27 L41,18 C43,11 50,9 55,13 C59,16 58,22 56,28 L62,20 C66,14 73,15 77,20 C80,24 78,30 74,35 L64,48 C60,54 53,57 45,56 L37,55 C32,55 29,59 29,64 C29,70 34,74 41,74 L51,74 C57,74 62,78 62,84 C62,91 57,95 50,95 L36,95 C20,95 10,84 10,69 L10,45 C10,37 12,31 17,27 Z"/>
+    <path
+        android:fillColor="#A72CF4"
+        android:pathData="M29,22 C31,17 35,17 37,22 L40,34 L34,42 L27,37 Z"/>
+    <path
+        android:fillColor="#F15BEA"
+        android:pathData="M46,17 C49,14 53,17 52,22 L48,35 L42,39 L40,32 Z"/>
+    <path
+        android:fillColor="#20B9F5"
+        android:pathData="M91,81 C90,91 84,96 77,94 C72,93 70,87 70,81 L67,90 C65,97 58,99 53,95 C49,92 50,86 52,80 L46,88 C42,94 35,93 31,88 C28,84 30,78 34,73 L44,60 C48,54 55,51 63,52 L71,53 C76,53 79,49 79,44 C79,38 74,34 67,34 L57,34 C51,34 46,30 46,24 C46,17 51,13 58,13 L72,13 C88,13 98,24 98,39 L98,63 C98,71 96,77 91,81 Z"/>
+    <path
+        android:fillColor="#168FEA"
+        android:pathData="M79,86 C77,91 73,91 71,86 L68,74 L74,66 L81,71 Z"/>
+    <path
+        android:fillColor="#47D6F4"
+        android:pathData="M62,91 C59,94 55,91 56,86 L60,73 L66,69 L68,76 Z"/>
+    <!-- Small open centre remains transparent, giving the cut-out identity. -->
 </vector>
