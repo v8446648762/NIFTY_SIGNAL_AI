@@ -24,7 +24,7 @@ object RiskAssessmentEngine {
         )
         if (values.any { it == null || !it.isFinite() }) return null
         val score = (
-            inputs.indicatorRisk!! .coerceIn(0.0, 100.0) * 0.30 +
+            inputs.indicatorRisk!!.coerceIn(0.0, 100.0) * 0.30 +
             inputs.trendRisk!! .coerceIn(0.0, 100.0) * 0.25 +
             inputs.priceActionRisk!! .coerceIn(0.0, 100.0) * 0.25 +
             inputs.sentimentRisk!! .coerceIn(0.0, 100.0) * 0.20
