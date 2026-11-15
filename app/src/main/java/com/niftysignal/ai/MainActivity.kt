@@ -650,6 +650,9 @@ class MainActivity : Activity() {
     private fun isMarathi(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getString("language", "English") == "मराठी"
 
+    private fun isMarathi(): Boolean =
+        getSharedPreferences("mgrow_settings", MODE_PRIVATE).getString("language", "English") == "मराठी"
+
     private fun applySavedAppearance() {
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
         when (prefs.getString("theme", "Midnight")) {
@@ -657,23 +660,36 @@ class MainActivity : Activity() {
                 bg = Color.rgb(0, 0, 0); surface = Color.rgb(18, 18, 22)
                 surface2 = Color.rgb(24, 27, 35); border = Color.rgb(70, 82, 105)
                 muted = Color.rgb(205, 215, 230); white = Color.WHITE
-                green = Color.rgb(0, 220, 140); cyan = Color.rgb(0, 220, 255)
-                red = Color.rgb(255, 80, 110); amber = Color.rgb(255, 195, 70)
             }
             "Ocean Blue" -> {
                 bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
                 surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
                 muted = Color.rgb(195, 220, 235); white = Color.WHITE
-                green = Color.rgb(0, 220, 165); cyan = Color.rgb(70, 225, 255)
-                red = Color.rgb(255, 95, 120); amber = Color.rgb(255, 205, 90)
+            }
+            "Graphite" -> {
+                bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
+                surface2 = Color.rgb(48, 54, 66); border = Color.rgb(95, 105, 125)
+                muted = Color.rgb(210, 215, 225); white = Color.WHITE
             }
             else -> {
                 bg = Color.rgb(16, 24, 39); surface = Color.argb(224, 29, 43, 67)
                 surface2 = Color.argb(236, 36, 54, 83); border = Color.argb(210, 75, 101, 139)
                 muted = Color.rgb(195, 208, 226); white = Color.WHITE
-                green = Color.rgb(0, 200, 150); cyan = Color.rgb(0, 213, 255)
-                red = Color.rgb(255, 85, 119); amber = Color.rgb(255, 200, 87)
             }
+        }
+        green = Color.rgb(0, 200, 150)
+        red = Color.rgb(255, 85, 119)
+        amber = Color.rgb(255, 200, 87)
+        cyan = when (prefs.getString("accent", "Cyan")) {
+            "Violet" -> Color.rgb(167, 110, 255)
+            "Blue" -> Color.rgb(65, 145, 255)
+            "Green" -> Color.rgb(0, 220, 145)
+            "Orange" -> Color.rgb(255, 145, 55)
+            "Red" -> Color.rgb(255, 75, 95)
+            "Pink" -> Color.rgb(255, 90, 180)
+            "Gold" -> Color.rgb(255, 195, 55)
+            "Teal" -> Color.rgb(0, 190, 180)
+            else -> Color.rgb(0, 213, 255)
         }
     }
 
@@ -695,11 +711,11 @@ class MainActivity : Activity() {
             return row
         }
 
+        val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Graphite")
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
-            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  Midnight / Pure Black / Ocean Blue"
+            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  4 display themes"
         ) {
-            val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue")
             AlertDialog.Builder(this).setTitle("Choose app theme")
                 .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Midnight"))) { dialog, which ->
                     prefs.edit().putString("theme", themes[which]).apply()
@@ -708,11 +724,24 @@ class MainActivity : Activity() {
                 }.setNegativeButton("Cancel", null).show()
         })
         addGap(root, 9)
+        val accents = arrayOf("Cyan", "Violet", "Blue", "Green", "Orange", "Red", "Pink", "Gold", "Teal")
+        root.addView(settingRow(
+            "Accent Colour",
+            (prefs.getString("accent", "Cyan") ?: "Cyan") + "  •  9 colour choices"
+        ) {
+            AlertDialog.Builder(this).setTitle("Choose accent colour")
+                .setSingleChoiceItems(accents, accents.indexOf(prefs.getString("accent", "Cyan"))) { dialog, which ->
+                    prefs.edit().putString("accent", accents[which]).apply()
+                    dialog.dismiss()
+                    recreate()
+                }.setNegativeButton("Cancel", null).show()
+        })
+        addGap(root, 9)
+        val languages = arrayOf("English", "मराठी", "हिन्दी", "ગુજરાતી", "தமிழ்", "తెలుగు")
         root.addView(settingRow(
             if (isMarathi()) "भाषा / Language" else "Language",
-            (prefs.getString("language", "English") ?: "English") + "  •  English / मराठी"
+            (prefs.getString("language", "English") ?: "English") + "  •  6 languages"
         ) {
-            val languages = arrayOf("English", "मराठी")
             AlertDialog.Builder(this).setTitle("Choose language")
                 .setSingleChoiceItems(languages, languages.indexOf(prefs.getString("language", "English"))) { dialog, which ->
                     prefs.edit().putString("language", languages[which]).apply()
@@ -720,7 +749,7 @@ class MainActivity : Activity() {
                     recreate()
                 }.setNegativeButton("Cancel", null).show()
         })
-        addGap(root, 12)
+        addGap(root, 9)        addGap(root, 12)
         section(root, if (isMarathi()) "सूचना आणि अलर्ट" else "NOTIFICATIONS & ALERTS")
         root.addView(buildAlerts())
         addGap(root, 12)
