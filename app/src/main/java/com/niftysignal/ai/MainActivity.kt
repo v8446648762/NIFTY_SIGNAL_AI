@@ -1166,6 +1166,79 @@ class MainActivity : FragmentActivity() {
         return score.toInt().coerceIn(0, 100)
     }
 
+    private var riskGaugeView: RiskGaugeView? = null
+    private var riskScoreView: TextView? = null
+    private var riskBandView: TextView? = null
+
+    // The existing RiskAssessmentEngine remains the single source of truth.
+    // Call this with fully validated component inputs when the live risk model is ready.
+    private fun updateRiskMeter(inputs: RiskInputs?) {
+        val assessment = inputs?.let { RiskAssessmentEngine.evaluate(it) }
+        riskGaugeView?.setAssessment(assessment)
+        riskScoreView?.text = assessment?.let { "${it.score}/100" } ?: "—/100"
+        riskBandView?.text = when (assessment?.band) {
+            RiskBand.LOW -> "LOW RISK"
+            RiskBand.MODERATE -> "MODERATE RISK"
+            RiskBand.HIGH -> "HIGH RISK"
+            null -> "DATA UNAVAILABLE"
+        }
+        riskBandView?.setTextColor(when (assessment?.band) {
+            RiskBand.LOW -> green
+            RiskBand.MODERATE -> amber
+            RiskBand.HIGH -> red
+            null -> muted
+        })
+    }
+
+    private inner class RiskGaugeView : View(this@MainActivity) {
+        private var assessment: RiskAssessment? = null
+        private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = dp(19).toFloat()
+            strokeCap = Paint.Cap.BUTT
+        }
+        private val needlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = white
+            strokeWidth = dp(4).toFloat()
+            strokeCap = Paint.Cap.ROUND
+        }
+        private val hubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = cyan }
+
+        fun setAssessment(value: RiskAssessment?) {
+            assessment = value
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val cx = width / 2f
+            val cy = height * 0.84f
+            val radius = min(width * 0.39f, height * 0.72f)
+            val oval = android.graphics.RectF(cx - radius, cy - radius, cx + radius, cy + radius)
+            val segments = listOf(
+                Color.rgb(0, 200, 120),
+                Color.rgb(255, 193, 7),
+                Color.rgb(255, 82, 82)
+            )
+            var angle = 180f
+            val sweep = 60f
+            segments.forEach { color ->
+                arcPaint.color = color
+                canvas.drawArc(oval, angle, sweep - 3f, false, arcPaint)
+                angle += sweep
+            }
+            val score = assessment?.score
+            if (score != null) {
+                val needleAngle = Math.toRadians((180.0 + score * 1.8))
+                val needleLength = radius * 0.78f
+                val nx = cx + kotlin.math.cos(needleAngle).toFloat() * needleLength
+                val ny = cy + kotlin.math.sin(needleAngle).toFloat() * needleLength
+                canvas.drawLine(cx, cy, nx, ny, needlePaint)
+                canvas.drawCircle(cx, cy, dp(8).toFloat(), hubPaint)
+            }
+        }
+    }
+
     private fun buildRiskMeter(): View {
         val box = card()
         box.background = rounded(Color.argb(238, 23, 37, 60), Color.argb(225, 0, 213, 255), 22)
@@ -1176,42 +1249,35 @@ class MainActivity : FragmentActivity() {
         top.addView(text("OVERALL TRADE RISK", 12f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(helpButton(
             "AI TRADE RISK METER",
-            "हा score 4 भागांवरून तयार होईल: Indicators 30%, Trend 25%, Price Action 25%, Market Sentiment 20%. प्रत्येक भागात adverse conditions जास्त असतील तर Risk Score वाढेल. हा score live candles आणि validated calculations मिळाल्यावरच दाखवला जाईल.",
-            "The score combines four components: Indicators 30%, Trend 25%, Price Action 25%, and Market Sentiment 20%. More adverse conditions increase the risk score. It will be displayed only after live candles and validated calculations are available."
+            "हा gauge आधीच्या Overall Trade Risk चाच score दाखवेल. RiskAssessmentEngine मधील एकच calculation वापरले जाईल. कमी score म्हणजे तुलनेने कमी जोखीम; हा नफ्याचा probability नाही. सर्व validated inputs मिळेपर्यंत score उपलब्ध दाखवला जाणार नाही.",
+            "This gauge displays the existing Overall Trade Risk score using the same RiskAssessmentEngine calculation. A lower score means comparatively lower assessed risk; it is not a probability of profit. No score is shown until all validated inputs are available."
         ))
-        top.addView(pill("WAITING FOR FEED", amber))
         box.addView(top)
-        addGap(box, 10)
+        addGap(box, 8)
+
+        val gauge = RiskGaugeView()
+        riskGaugeView = gauge
+        box.addView(gauge, LinearLayout.LayoutParams(-1, dp(150)))
+
         val scoreRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        scoreRow.addView(text("—%", 38f, cyan, true), LinearLayout.LayoutParams(0, -2, 1f))
-        scoreRow.addView(text("Risk score unavailable\nuntil validated live data", 11f, muted, true))
+        val score = text("—/100", 30f, cyan, true)
+        riskScoreView = score
+        scoreRow.addView(score, LinearLayout.LayoutParams(0, -2, 1f))
+        val band = pill("DATA UNAVAILABLE", muted)
+        riskBandView = band
+        scoreRow.addView(band)
         box.addView(scoreRow)
-        addGap(box, 8)
-        box.addView(text("RISK COMPONENTS", 10f, cyan, true))
         addGap(box, 6)
-        val components = listOf(
-            "Indicators (VWAP / EMA / RSI / MACD)" to "30%",
-            "Trend strength & direction" to "25%",
-            "Price action & candle structure" to "25%",
-            "Market sentiment & breadth" to "20%"
-        )
-        components.forEach { item ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            row.addView(text(item.first, 11f, muted), LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(text(item.second, 11f, white, true))
-            box.addView(row)
-            addGap(box, 5)
-        }
+        box.addView(text("LOW 0–30  •  MODERATE 31–60  •  HIGH 61–100", 10f, muted, true))
+        addGap(box, 6)
         box.addView(text(
-            "LOW 0–30  •  MODERATE 31–60  •  HIGH 61–100. Risk score is not a profit probability or a trade guarantee.",
+            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Sentiment 20%. Score updates only from the existing risk engine; missing or stale inputs show DATA UNAVAILABLE.",
             10f, amber
         ))
+        updateRiskMeter(null)
         return box
     }
 
