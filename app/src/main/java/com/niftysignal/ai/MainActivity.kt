@@ -58,16 +58,16 @@ class MainActivity : Activity() {
     }
 
     // Premium midnight glass theme: high-contrast text with cyan/violet accents.
-    private val bg = Color.rgb(16, 24, 39)
-    private val surface = Color.argb(224, 29, 43, 67)
-    private val surface2 = Color.argb(236, 36, 54, 83)
-    private val border = Color.argb(210, 75, 101, 139)
-    private val muted = Color.rgb(195, 208, 226)
-    private val white = Color.rgb(255, 255, 255)
-    private val green = Color.rgb(0, 200, 150)
-    private val cyan = Color.rgb(0, 213, 255)
-    private val red = Color.rgb(255, 85, 119)
-    private val amber = Color.rgb(255, 200, 87)
+    private var bg = Color.rgb(16, 24, 39)
+    private var surface = Color.argb(224, 29, 43, 67)
+    private var surface2 = Color.argb(236, 36, 54, 83)
+    private var border = Color.argb(210, 75, 101, 139)
+    private var muted = Color.rgb(195, 208, 226)
+    private var white = Color.rgb(255, 255, 255)
+    private var green = Color.rgb(0, 200, 150)
+    private var cyan = Color.rgb(0, 213, 255)
+    private var red = Color.rgb(255, 85, 119)
+    private var amber = Color.rgb(255, 200, 87)
     private var tf = "5 MIN"
     private var paperSide = TradeBias.BUY_CE
     private var paperOpen = false
@@ -420,16 +420,19 @@ class MainActivity : Activity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(11, 18, 32)
-        window.navigationBarColor = Color.rgb(11, 18, 32)
+        applySavedAppearance()
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
         window.decorView.systemUiVisibility = 0
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            fitsSystemWindows = true
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(11, 18, 32), Color.rgb(20, 35, 61), Color.rgb(36, 27, 70))
+                intArrayOf(bg, surface2, Color.rgb(36, 27, 70))
             )
         }
         val scroll = ScrollView(this).apply {
@@ -488,6 +491,12 @@ class MainActivity : Activity() {
                 section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
                 pageContent.addView(buildAlerts())
             }
+            "Settings" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "APP SETTINGS", "PERSONALIZE MGROW")
+                pageContent.addView(buildSettings())
+            }
         }
         addGap(pageContent, 12)
         pageContent.addView(text("MGrow  /  ${page.uppercase()} SECTION", 10f, muted, true).apply {
@@ -504,11 +513,12 @@ class MainActivity : Activity() {
         bottomNav.setPadding(dp(6), dp(8), dp(6), dp(8))
         bottomNav.background = rounded(Color.argb(245, 15, 27, 46), border, 18)
         val items = listOf(
-            Triple("Home", "⌂", "Home"),
-            Triple("Chart", "▥", "Chart"),
+            Triple("Home", "⌂", if (isMarathi()) "होम" else "Home"),
+            Triple("Chart", "▥", if (isMarathi()) "चार्ट" else "Chart"),
             Triple("AI", "✦", "AI"),
-            Triple("Alerts", "♧", "Alerts"),
-            Triple("Tools", "⚙", "Tools")
+            Triple("Alerts", "♧", if (isMarathi()) "अलर्ट" else "Alerts"),
+            Triple("Tools", "⚙", if (isMarathi()) "टूल्स" else "Tools"),
+            Triple("Settings", "☷", if (isMarathi()) "सेटिंग" else "Settings")
         )
         items.forEach { item ->
             val selected = currentPage == item.first
@@ -599,7 +609,7 @@ class MainActivity : Activity() {
                 contentDescription = "$title. $detail"
                 setOnClickListener { showPage(destination) }
                 addView(text("$symbol  $title", 16f, white, true))
-                this@MainActivity.addGap(this, 7)
+                addView(View(this@MainActivity), LinearLayout.LayoutParams(1, dp(7)))
                 addView(text(detail, 12f, muted))
             }
         }
@@ -634,6 +644,107 @@ class MainActivity : Activity() {
         val note = text("Select a card or use the bottom navigation to open each section.", 11f, muted, true)
         note.gravity = Gravity.CENTER
         root.addView(note)
+        return root
+    }
+
+    private fun isMarathi(): Boolean =
+        getSharedPreferences("mgrow_settings", MODE_PRIVATE).getString("language", "English") == "मराठी"
+
+    private fun applySavedAppearance() {
+        val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
+        when (prefs.getString("theme", "Midnight")) {
+            "Pure Black" -> {
+                bg = Color.rgb(0, 0, 0); surface = Color.rgb(18, 18, 22)
+                surface2 = Color.rgb(24, 27, 35); border = Color.rgb(70, 82, 105)
+                muted = Color.rgb(205, 215, 230); white = Color.WHITE
+                green = Color.rgb(0, 220, 140); cyan = Color.rgb(0, 220, 255)
+                red = Color.rgb(255, 80, 110); amber = Color.rgb(255, 195, 70)
+            }
+            "Ocean Blue" -> {
+                bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
+                surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
+                muted = Color.rgb(195, 220, 235); white = Color.WHITE
+                green = Color.rgb(0, 220, 165); cyan = Color.rgb(70, 225, 255)
+                red = Color.rgb(255, 95, 120); amber = Color.rgb(255, 205, 90)
+            }
+            else -> {
+                bg = Color.rgb(16, 24, 39); surface = Color.argb(224, 29, 43, 67)
+                surface2 = Color.argb(236, 36, 54, 83); border = Color.argb(210, 75, 101, 139)
+                muted = Color.rgb(195, 208, 226); white = Color.WHITE
+                green = Color.rgb(0, 200, 150); cyan = Color.rgb(0, 213, 255)
+                red = Color.rgb(255, 85, 119); amber = Color.rgb(255, 200, 87)
+            }
+        }
+    }
+
+    private fun buildSettings(): View {
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
+
+        fun settingRow(title: String, subtitle: String, action: () -> Unit): View {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = rounded(surface, border, 14)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { action() }
+            }
+            row.addView(text(title, 15f, white, true))
+            row.addView(text(subtitle, 11f, muted))
+            return row
+        }
+
+        root.addView(settingRow(
+            if (isMarathi()) "अॅप थीम" else "App Theme",
+            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  Midnight / Pure Black / Ocean Blue"
+        ) {
+            val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue")
+            AlertDialog.Builder(this).setTitle("Choose app theme")
+                .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Midnight"))) { dialog, which ->
+                    prefs.edit().putString("theme", themes[which]).apply()
+                    dialog.dismiss()
+                    recreate()
+                }.setNegativeButton("Cancel", null).show()
+        })
+        addGap(root, 9)
+        root.addView(settingRow(
+            if (isMarathi()) "भाषा / Language" else "Language",
+            (prefs.getString("language", "English") ?: "English") + "  •  English / मराठी"
+        ) {
+            val languages = arrayOf("English", "मराठी")
+            AlertDialog.Builder(this).setTitle("Choose language")
+                .setSingleChoiceItems(languages, languages.indexOf(prefs.getString("language", "English"))) { dialog, which ->
+                    prefs.edit().putString("language", languages[which]).apply()
+                    dialog.dismiss()
+                    recreate()
+                }.setNegativeButton("Cancel", null).show()
+        })
+        addGap(root, 12)
+        section(root, if (isMarathi()) "सूचना आणि अलर्ट" else "NOTIFICATIONS & ALERTS")
+        root.addView(buildAlerts())
+        addGap(root, 12)
+        section(root, if (isMarathi()) "इतर पर्याय" else "OTHER OPTIONS")
+        val keepAwake = Switch(this).apply {
+            text = if (isMarathi()) "स्क्रीन चालू ठेवा" else "Keep screen awake"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("keep_awake", false)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("keep_awake", checked).apply()
+                if (checked) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+        root.addView(keepAwake)
+        if (prefs.getBoolean("keep_awake", false)) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        addGap(root, 8)
+        root.addView(text(
+            if (isMarathi()) "टीप: Theme बदलल्यावर अॅप पुन्हा उघडेल. काही तांत्रिक/ट्रेडिंग संज्ञा English मध्येच राहतील." else
+                "Note: The app restarts to apply a theme. Some technical and trading terms remain in English.",
+            10f, amber
+        ))
         return root
     }
 
