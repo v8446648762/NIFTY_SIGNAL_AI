@@ -28,6 +28,7 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.TextClock
 import kotlin.math.max
 import kotlin.math.min
 
@@ -666,6 +667,34 @@ class MainActivity : FragmentActivity() {
         return outer
     }
 
+    private fun buildDateTimeView(): LinearLayout {
+        val dateClock = TextClock(this).apply {
+            format12Hour = "EEE, dd MMM yyyy"
+            format24Hour = "EEE, dd MMM yyyy"
+            textSize = 11f
+            setTextColor(muted)
+            timeZone = java.util.TimeZone.getDefault().id
+        }
+        val timeClock = TextClock(this).apply {
+            format12Hour = "hh:mm:ss a"
+            format24Hour = "HH:mm:ss"
+            textSize = 13f
+            setTextColor(cyan)
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            timeZone = java.util.TimeZone.getDefault().id
+        }
+        val is24 = android.text.format.DateFormat.is24HourFormat(this)
+        dateClock.setFormat12Hour("EEE, dd MMM yyyy")
+        dateClock.setFormat24Hour("EEE, dd MMM yyyy")
+        timeClock.setFormat12Hour(if (is24) "HH:mm:ss" else "hh:mm:ss a")
+        timeClock.setFormat24Hour("HH:mm:ss")
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(dateClock)
+            addView(timeClock)
+        }
+    }
+
     private fun buildHomeDashboard(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val brandRow = LinearLayout(this).apply {
@@ -675,7 +704,9 @@ class MainActivity : FragmentActivity() {
         brandRow.addView(text("MGrow AI", 21f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
         brandRow.addView(pill("Dashboard", green))
         root.addView(brandRow)
-        addGap(root, 22)
+        addGap(root, 6)
+        root.addView(buildDateTimeView())
+        addGap(root, 16)
         root.addView(text("NIFTY 50", 29f, white, true))
         addGap(root, 5)
         root.addView(text("Market Overview  •  Live data जोडल्यावर अपडेट", 13f, muted, true))
@@ -898,6 +929,7 @@ class MainActivity : FragmentActivity() {
         titleCol.addView(text("MGrow", 24f, white, true))
         titleCol.addView(text("AI NIFTY OPTIONS TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
+        wrap.addView(buildDateTimeView())
         wrap.addView(pill("●  DEMO MODE", amber))
         return wrap
     }
