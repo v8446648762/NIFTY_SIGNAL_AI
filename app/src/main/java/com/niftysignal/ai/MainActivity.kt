@@ -650,9 +650,6 @@ class MainActivity : Activity() {
     private fun isMarathi(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getString("language", "English") == "मराठी"
 
-    private fun isMarathi(): Boolean =
-        getSharedPreferences("mgrow_settings", MODE_PRIVATE).getString("language", "English") == "मराठी"
-
     private fun applySavedAppearance() {
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
         when (prefs.getString("theme", "Midnight")) {
@@ -749,7 +746,8 @@ class MainActivity : Activity() {
                     recreate()
                 }.setNegativeButton("Cancel", null).show()
         })
-        addGap(root, 9)        addGap(root, 12)
+        addGap(root, 9)
+        addGap(root, 12)
         section(root, if (isMarathi()) "सूचना आणि अलर्ट" else "NOTIFICATIONS & ALERTS")
         root.addView(buildAlerts())
         addGap(root, 12)
