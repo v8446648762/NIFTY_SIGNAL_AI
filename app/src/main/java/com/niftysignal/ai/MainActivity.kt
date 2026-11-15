@@ -30,6 +30,33 @@ import kotlin.math.max
 import kotlin.math.min
 
 class MainActivity : Activity() {
+    @Suppress("DEPRECATION")
+    private fun showMarketNotification(title: String, message: String, notificationId: Int) {
+        val channelId = "mgrow_market_alerts"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "MGrow Market Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "Price, indicator and confirmed setup alerts from MGrow" }
+            manager.createNotificationChannel(channel)
+        }
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, channelId)
+        } else {
+            Notification.Builder(this)
+        }
+        val notification = builder
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(Notification.BigTextStyle().bigText(message))
+            .setAutoCancel(true)
+            .build()
+        manager.notify(notificationId, notification)
+    }
+
     // Premium midnight glass theme: high-contrast text with cyan/violet accents.
     private val bg = Color.rgb(16, 24, 39)
     private val surface = Color.argb(224, 29, 43, 67)
@@ -718,7 +745,7 @@ class MainActivity : Activity() {
                         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 301)
                     }
                 } else {
-                    AlertNotifications.show(
+                    showMarketNotification(
                         this@MainActivity,
                         "MGrow notification test",
                         "Phone notifications are working. Market alerts will activate after live data and alert rules are connected.",
