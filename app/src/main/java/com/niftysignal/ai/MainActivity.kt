@@ -778,6 +778,14 @@ class MainActivity : FragmentActivity() {
                 surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
                 muted = Color.rgb(195, 220, 235); white = Color.WHITE
             }
+            "Blue Glass" -> {
+                bg = Color.rgb(13, 24, 45)
+                surface = Color.argb(226, 28, 43, 69)
+                surface2 = Color.argb(238, 40, 61, 96)
+                border = Color.argb(220, 88, 151, 220)
+                muted = Color.rgb(190, 211, 238)
+                white = Color.rgb(248, 251, 255)
+            }
             "Graphite" -> {
                 bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
                 surface2 = Color.rgb(48, 54, 66); border = Color.rgb(95, 105, 125)
@@ -823,10 +831,10 @@ class MainActivity : FragmentActivity() {
             return row
         }
 
-        val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Graphite")
+        val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
-            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  4 display themes"
+            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  5 display themes"
         ) {
             AlertDialog.Builder(this).setTitle("Choose app theme")
                 .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Midnight"))) { dialog, which ->
