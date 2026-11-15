@@ -75,6 +75,9 @@ class MainActivity : Activity() {
     private val paperHistory = mutableListOf<String>()
     private var marketDataFeed: MarketDataFeed? = null
     private var latestSnapshot: MarketDataSnapshot? = null
+    private var currentPage = "Home"
+    private lateinit var pageContent: LinearLayout
+    private lateinit var bottomNav: LinearLayout
 
     private lateinit var paperStatus: TextView
     private lateinit var paperHistoryView: TextView
@@ -426,45 +429,114 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(
-                    Color.rgb(11, 18, 32),
-                    Color.rgb(20, 35, 61),
-                    Color.rgb(36, 27, 70)
-                )
+                intArrayOf(Color.rgb(11, 18, 32), Color.rgb(20, 35, 61), Color.rgb(36, 27, 70))
             )
         }
         val scroll = ScrollView(this).apply {
             clipToPadding = false
             setPadding(dp(16), dp(14), dp(16), dp(18))
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(buildHeader())
-                addGap(this, 16)
-                addView(buildMarketCard())
-                addGap(this, 18)
-                section(this, "AI SIGNAL ENGINE", "ANALYSIS")
-                addView(buildSignalCard())
-                addGap(this, 18)
-                section(this, "LIVE MARKET CHART", "NIFTY 50")
-                addView(buildChartCard())
-                addGap(this, 18)
-                addView(buildFeatureGrid())
-                addGap(this, 8)
-                section(this, "AI TRADE RISK METER", "LIVE RISK SCORE")
-                addView(buildRiskMeter())
-                addGap(this, 18)
-                section(this, "PAPER TRADING", "MANUAL PRACTICE")
-                addView(buildPaperTrading())
-                addGap(this, 18)
-                addView(text("MGrow   /   MARKET INTELLIGENCE", 10f, muted, true).apply {
-                    gravity = Gravity.CENTER
-                    setPadding(0, dp(8), 0, dp(12))
-                })
-            })
         }
+        pageContent = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(pageContent)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(buildBottomBar())
+        bottomNav = LinearLayout(this)
+        root.addView(bottomNav, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
+        showPage("Home")
+    }
+
+    private fun showPage(page: String) {
+        currentPage = page
+        pageContent.removeAllViews()
+        when (page) {
+            "Home" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 16)
+                pageContent.addView(buildMarketCard())
+                addGap(pageContent, 18)
+                section(pageContent, "AI SIGNAL ENGINE", "ANALYSIS")
+                pageContent.addView(buildSignalCard())
+                addGap(pageContent, 18)
+                section(pageContent, "AI TRADE RISK METER", "LIVE RISK SCORE")
+                pageContent.addView(buildRiskMeter())
+            }
+            "Chart" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "LIVE MARKET CHART", "NIFTY 50")
+                pageContent.addView(buildChartCard())
+                addGap(pageContent, 18)
+                section(pageContent, "MARKET LEVELS", "SUPPORT & RESISTANCE")
+                pageContent.addView(buildLevels())
+            }
+            "AI" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "AI SIGNAL ENGINE", "CE / PE / WAIT")
+                pageContent.addView(buildSignalCard())
+                addGap(pageContent, 18)
+                section(pageContent, "MARKET INTELLIGENCE", "PRICE ACTION & TREND")
+                pageContent.addView(buildInsights())
+                addGap(pageContent, 18)
+                section(pageContent, "AI TRADE RISK METER", "RISK ASSESSMENT")
+                pageContent.addView(buildRiskMeter())
+            }
+            "Tools" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "TECHNICAL ANALYTICS", "INDICATORS")
+                pageContent.addView(buildIndicators())
+                addGap(pageContent, 18)
+                section(pageContent, "PAPER TRADING", "MANUAL PRACTICE ONLY")
+                pageContent.addView(buildPaperTrading())
+            }
+            "Alerts" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
+                pageContent.addView(buildAlerts())
+            }
+        }
+        addGap(pageContent, 12)
+        pageContent.addView(text("MGrow  /  ${page.uppercase()} SECTION", 10f, muted, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(12))
+        })
+        renderBottomNavigation()
+    }
+
+    private fun renderBottomNavigation() {
+        bottomNav.removeAllViews()
+        bottomNav.orientation = LinearLayout.HORIZONTAL
+        bottomNav.gravity = Gravity.CENTER
+        bottomNav.setPadding(dp(6), dp(8), dp(6), dp(8))
+        bottomNav.background = rounded(Color.argb(245, 15, 27, 46), border, 18)
+        val items = listOf(
+            Triple("Home", "⌂", "Home"),
+            Triple("Chart", "▥", "Chart"),
+            Triple("AI", "✦", "AI"),
+            Triple("Tools", "⚙", "Tools"),
+            Triple("Alerts", "♢", "Alerts")
+        )
+        items.forEach { item ->
+            val selected = currentPage == item.first
+            val tab = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(3), dp(3), dp(3), dp(3))
+                background = if (selected) rounded(Color.argb(70, 0, 213, 255), Color.argb(100, 0, 213, 255), 12) else null
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { showPage(item.first) }
+            }
+            tab.addView(text(item.second, 19f, if (selected) cyan else muted, true).apply {
+                gravity = Gravity.CENTER
+            })
+            tab.addView(text(item.third, 9f, if (selected) cyan else muted, selected).apply {
+                gravity = Gravity.CENTER
+            })
+            bottomNav.addView(tab, LinearLayout.LayoutParams(0, -2, 1f))
+        }
     }
 
     private fun buildFeatureGrid(): View {
@@ -987,23 +1059,6 @@ class MainActivity : Activity() {
         addGap(box, 6)
         box.addView(text("Records are temporary for this app session. P&L is gross, excluding brokerage, taxes and slippage.", 10f, amber))
         return box
-    }
-
-    private fun buildBottomBar(): View {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(10), dp(8), dp(10))
-            background = rounded(Color.argb(235, 22, 34, 55), Color.argb(220, 75, 101, 139), 20)
-        }
-        listOf("⌂\nDashboard", "▥\nChart", "✦\nAI Signals", "◷\nAlerts").forEachIndexed { i, label ->
-            val color = if (i == 0) cyan else muted
-            bar.addView(text(label, 10f, color, i == 0).apply {
-                gravity = Gravity.CENTER
-                setPadding(dp(5), dp(3), dp(5), dp(3))
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-        }
-        return bar
     }
 
     private fun setTf(value: String) {
