@@ -25,29 +25,48 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Check signing secrets
+      - name: Check whether permanent signing is configured
+        id: signing
         env:
           MGROW_KEYSTORE_BASE64: ${{ secrets.MGROW_KEYSTORE_BASE64 }}
         run: |
-          test -n "$MGROW_KEYSTORE_BASE64" || (echo "Missing MGROW_KEYSTORE_BASE64 secret" && exit 1)
-          test -n "$MGROW_KEYSTORE_PASSWORD" || (echo "Missing MGROW_KEYSTORE_PASSWORD secret" && exit 1)
-          test -n "$MGROW_KEY_ALIAS" || (echo "Missing MGROW_KEY_ALIAS secret" && exit 1)
-          test -n "$MGROW_KEY_PASSWORD" || (echo "Missing MGROW_KEY_PASSWORD secret" && exit 1)
-          printf '%s' "$MGROW_KEYSTORE_BASE64" | base64 --decode > "$MGROW_KEYSTORE_PATH"
-          chmod 600 "$MGROW_KEYSTORE_PATH"
+          if [ -n "$MGROW_KEYSTORE_BASE64" ] && [ -n "$MGROW_KEYSTORE_PASSWORD" ] && [ -n "$MGROW_KEY_ALIAS" ] && [ -n "$MGROW_KEY_PASSWORD" ]; then
+            printf '%s' "$MGROW_KEYSTORE_BASE64" | base64 --decode > "$MGROW_KEYSTORE_PATH"
+            chmod 600 "$MGROW_KEYSTORE_PATH"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Permanent signing secrets are not configured; building a debug APK only."
+          fi
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Run unit tests and build signed release APK
-        run: gradle :app:testDebugUnitTest :app:assembleRelease
+      - name: Run unit tests and build debug APK
+        run: gradle :app:testDebugUnitTest :app:assembleDebug
 
-      - name: Generate APK checksum
+      - name: Build permanently signed release APK
+        if: steps.signing.outputs.ready == 'true'
+        run: gradle :app:assembleRelease
+
+      - name: Generate debug APK checksum
+        run: sha256sum app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MGrow-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Generate release APK checksum
+        if: steps.signing.outputs.ready == 'true'
         run: sha256sum app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload signed APK
+      - name: Upload signed release APK
+        if: steps.signing.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: MGrow-release-apk
