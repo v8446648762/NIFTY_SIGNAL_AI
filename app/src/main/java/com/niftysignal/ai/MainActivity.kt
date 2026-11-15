@@ -572,12 +572,12 @@ class MainActivity : Activity() {
         }
 
         addPair(
-            tile("TECHNICAL ANALYTICS", "LIVE CALCULATION", buildIndicators()),
-            tile("MARKET LEVELS", "AUTO DETECTION", buildLevels())
+            tile("TECHNICAL ANALYTICS", "WAITING FOR LIVE FEED", buildIndicators()),
+            tile("MARKET LEVELS", "WAITING FOR LIVE FEED", buildLevels())
         )
         addPair(
-            tile("MARKET INTELLIGENCE", "SMART FILTERS", buildInsights()),
-            tile("SIGNAL ALERTS", "NOTIFICATIONS", buildAlerts())
+            tile("MARKET INTELLIGENCE", "LIVE FILTERS NOT ACTIVE YET", buildInsights()),
+            tile("SIGNAL ALERTS", "SETTINGS READY • TRIGGERS PENDING", buildAlerts())
         )
         return outer
     }
@@ -630,16 +630,16 @@ class MainActivity : Activity() {
             feature("AI Signals", "CE / PE / WAIT", "▣", "AI")
         )
         addFeatureRow(
-            feature("Technical Analysis", "VWAP, EMA, RSI", "▥", "Tools"),
-            feature("Option Chain", "OI, PCR, CE / PE", "☷", "Chart")
+            feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "▥", "Tools"),
+            feature("Option Chain", "Planned after data integration", "☷", "Chart")
         )
         addFeatureRow(
-            feature("AI Intelligence", "Price Action, Structure", "✧", "AI"),
-            feature("Risk Manager", "Risk %, SL, Targets", "◇", "AI")
+            feature("AI Intelligence", "Filters activate with live candles", "✧", "AI"),
+            feature("Risk Manager", "Risk score • Live data required", "◇", "AI")
         )
         addFeatureRow(
-            feature("Alerts", "Smart Notifications", "♧", "Alerts"),
-            feature("Trading Journal", "Trade History", "▤", "Tools")
+            feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts"),
+            feature("Paper Trading", "Manual practice • Session only", "▤", "Tools")
         )
         val note = text("Select a card or use the bottom navigation to open each section.", 11f, muted, true)
         note.gravity = Gravity.CENTER
@@ -949,19 +949,28 @@ class MainActivity : Activity() {
         box.addView(text("NOTIFICATION SETTINGS", 10f, cyan, true))
         addGap(box, 6)
 
+        val categorySwitches = mutableListOf<Switch>()
         fun alertSwitch(label: String, key: String) {
+            val alertPrefs = getSharedPreferences("mgrow_alerts", MODE_PRIVATE)
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
             row.addView(text(label, 12f, white), LinearLayout.LayoutParams(0, -2, 1f))
             val toggle = Switch(this).apply {
-                isChecked = getSharedPreferences("mgrow_alerts", MODE_PRIVATE)
-                    .getBoolean(key, false)
+                isChecked = alertPrefs.getBoolean(key, false)
                 setOnCheckedChangeListener { _, checked ->
-                    getSharedPreferences("mgrow_alerts", MODE_PRIVATE).edit()
-                        .putBoolean(key, checked).apply()
+                    alertPrefs.edit().putBoolean(key, checked).apply()
                 }
+            }
+            if (key == "enabled") {
+                toggle.setOnCheckedChangeListener { _, checked ->
+                    alertPrefs.edit().putBoolean(key, checked).apply()
+                    categorySwitches.forEach { it.isEnabled = checked }
+                }
+            } else {
+                categorySwitches.add(toggle)
+                toggle.isEnabled = alertPrefs.getBoolean("enabled", false)
             }
             row.addView(toggle)
             box.addView(row)
