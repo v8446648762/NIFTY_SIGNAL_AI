@@ -15,22 +15,22 @@ import java.net.URL
 import java.time.OffsetDateTime
 
 /** Read-only MGrow Worker poller. The Upstox token remains server-side. */
-class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : MarketDataFeed {
+class UpstoxMarketDataFeed(workerBaseUrl: String, sessionToken: String) : MarketDataFeed {
     private val baseUrl = workerBaseUrl.trim().trimEnd('/')
-    @Volatile private var idToken: String? = googleIdToken
+    @Volatile private var sessionToken: String? = sessionToken
     private var scope: CoroutineScope? = null
     private var pollJob: Job? = null
 
     override fun connect(listener: MarketDataFeed.Listener) {
-        val sessionToken = idToken
+        val activeSessionToken = sessionToken
         stopPolling()
-        idToken = sessionToken
+        sessionToken = activeSessionToken
         if (baseUrl.isBlank() || !baseUrl.startsWith("https://")) {
             listener.onStatusChanged(FeedConnectionState.ERROR, "Secure MGrow Worker URL is not configured.")
             return
         }
-        if (idToken.isNullOrBlank()) {
-            listener.onStatusChanged(FeedConnectionState.ERROR, "Google sign-in is required.")
+        if (sessionToken.isNullOrBlank()) {
+            listener.onStatusChanged(FeedConnectionState.ERROR, "MGrow PIN login is required.")
             return
         }
         val feedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -90,7 +90,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
 
     override fun disconnect() {
         stopPolling()
-        idToken = null
+        sessionToken = null
     }
 
     private fun stopPolling() {
@@ -101,7 +101,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
     }
 
     private fun getJson(path: String): JSONObject {
-        val token = idToken ?: throw IllegalStateException("Google session expired")
+        val token = sessionToken ?: throw IllegalStateException("MGrow session expired")
         val connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = REQUEST_TIMEOUT_MS
@@ -151,5 +151,34 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
     private companion object {
         const val POLL_INTERVAL_MS = 15_000L
         const val REQUEST_TIMEOUT_MS = 5_000
+    }
+}
+
+
+/** Exchanges a user-entered PIN for a short-lived server-signed MGrow session. */
+object MgrowPinAuth {
+    fun login(workerBaseUrl: String, pin: String): String {
+        val connection = (URL(workerBaseUrl.trimEnd('/') + "/v1/auth/login").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 5_000
+            readTimeout = 5_000
+            doOutput = true
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Content-Type", "application/json")
+            useCaches = false
+        }
+        try {
+            val body = JSONObject().put("pin", pin).toString().toByteArray(Charsets.UTF_8)
+            connection.outputStream.use { it.write(body) }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: "{}"
+            val json = JSONObject(response)
+            if (status !in 200..299) throw IllegalStateException(json.optString("error", "server_error"))
+            return json.optString("token").takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("missing_session_token")
+        } finally {
+            connection.disconnect()
+        }
     }
 }
