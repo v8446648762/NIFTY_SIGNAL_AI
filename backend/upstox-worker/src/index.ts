@@ -44,7 +44,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   const authorization = request.headers.get("authorization") ?? "";
-  const match = authorization.match(/^Bearer ([^\\s]+)$/i);
+  const match = authorization.match(/^Bearer ([^\s]+)$/i);
   if (!match) return json({ error: "unauthorized" }, 401);
   const identity = await verifyGoogleIdToken(match[1], env);
   if (!identity) return json({ error: "unauthorized" }, 401);
