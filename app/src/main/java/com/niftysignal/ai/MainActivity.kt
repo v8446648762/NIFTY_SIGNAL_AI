@@ -3,6 +3,13 @@ package com.niftysignal.ai
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.lifecycle.lifecycleScope
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -38,19 +45,22 @@ import kotlin.math.min
 class MainActivity : FragmentActivity() {
     private var appUnlocked = false
     private var authenticationInProgress = false
+    private var googleSignInInProgress = false
+    // Kept in memory only; never persisted to preferences, logs, or APK resources.
+    private var googleIdTokenForBackend: String? = null
 
     private fun isAppLockEnabled(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
 
     override fun onResume() {
         super.onResume()
-        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress) {
+        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress && !googleSignInInProgress) {
             authenticateAppLock()
         }
     }
 
     override fun onStop() {
-        if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
+        if (isAppLockEnabled() && !authenticationInProgress && !googleSignInInProgress) appUnlocked = false
         super.onStop()
     }
 
@@ -1092,6 +1102,62 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
+    private fun beginGoogleSignIn(statusView: TextView, signInButton: Button, clearButton: Button) {
+        val clientId = getString(R.string.google_web_client_id).trim()
+        if (clientId.isEmpty()) {
+            Toast.makeText(this, "Google Web Client ID is not configured yet.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        signInButton.isEnabled = false
+        googleSignInInProgress = true
+        lifecycleScope.launch {
+            try {
+                // This button explicitly starts Google sign-in, so use the
+                // dedicated Sign in with Google option rather than the
+                // passive account/password credential discovery option.
+                val googleSignInOption = GetSignInWithGoogleOption.Builder(clientId)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleSignInOption)
+                    .build()
+                val credentialManager = CredentialManager.create(this@MainActivity)
+                val result = credentialManager.getCredential(this@MainActivity, request)
+                val credential = result.credential
+
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    googleIdTokenForBackend = googleCredential.idToken
+                    statusView.text = "Google credential received (memory only); backend not connected"
+                    signInButton.text = "GOOGLE CREDENTIAL RECEIVED"
+                    clearButton.isEnabled = true
+                    Toast.makeText(this@MainActivity, "Google credential received. Backend connection is pending.", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Unsupported Google credential.", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                // Show exception type and message for diagnosis without exposing tokens.
+                val errorType = e.javaClass.simpleName.ifBlank { "UnknownError" }
+                val errorMessage = e.localizedMessage ?: "Please try again."
+                val diagnostic = "$errorType: $errorMessage"
+                statusView.text = "Google sign-in failed ($diagnostic)"
+                Toast.makeText(
+                    this@MainActivity,
+                    "Google sign-in failed ($diagnostic)",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                googleSignInInProgress = false
+                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                    appUnlocked = false
+                }
+                signInButton.isEnabled = true
+            }
+        }
+    }
+
     private fun buildSettings(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
@@ -1109,6 +1175,36 @@ class MainActivity : FragmentActivity() {
             row.addView(text(subtitle, 11f, muted))
             return row
         }
+
+        section(root, if (isMarathi()) "GOOGLE ACCOUNT" else "GOOGLE ACCOUNT")
+        val googleStatus = text(
+            if (googleIdTokenForBackend == null) "No Google credential stored in app memory" else "Google credential received (memory only); backend not connected",
+            12f, muted
+        )
+        root.addView(googleStatus)
+        lateinit var googleSignOut: Button
+        val googleButton = Button(this).apply {
+            text = if (googleIdTokenForBackend == null) "CONTINUE WITH GOOGLE" else "GOOGLE CREDENTIAL RECEIVED"
+            setOnClickListener { beginGoogleSignIn(googleStatus, this, googleSignOut) }
+        }
+        root.addView(googleButton)
+        googleSignOut = Button(this).apply {
+            text = "CLEAR SAVED APP TOKEN"
+            isEnabled = googleIdTokenForBackend != null
+            setOnClickListener {
+                googleIdTokenForBackend = null
+                googleStatus.text = "No Google credential stored in app memory"
+                googleButton.text = "CONTINUE WITH GOOGLE"
+                isEnabled = false
+                Toast.makeText(this@MainActivity, "Saved app token cleared from memory. Google account session is unchanged.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        root.addView(googleSignOut)
+        root.addView(text(
+            "Sign-in foundation only: the token stays in memory and is not yet sent to Cloudflare. Backend URL and OAuth client ID must be configured before live API access.",
+            10f, amber
+        ))
+        addGap(root, 12)
 
         val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
         root.addView(settingRow(

@@ -1,6 +1,9 @@
 name: Build Android APK
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
   push:
     branches:
@@ -8,6 +11,7 @@ on:
       - feature/testing-lab-isolated
       - feature/advanced-ai-engine-v1
       - feature/testing-lab-advanced-ai-ui
+      - feature/android-google-signin-foundation
 
 jobs:
   build:
