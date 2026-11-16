@@ -55,7 +55,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
                     if (!lastPrice.isFinite() || lastPrice <= 0.0) {
                         throw IllegalStateException("NIFTY quote price is invalid")
                     }
-                    val previousClose = ohlc?.optDouble("close", Double.NaN)
+                    val previousClose = quote.optDouble("prev_close_price", Double.NaN)
                         ?.takeIf { it.isFinite() && it > 0.0 }
                     val dayHigh = ohlc?.optDouble("high", Double.NaN)
                         ?.takeIf { it.isFinite() && it > 0.0 }
