@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handleRequest } from "../dist/src/index.js";
+import { handleRequest, extractValidCandles } from "../dist/src/index.js";
 
 const emptyEnv = {
   UPSTOX_ANALYTICS_TOKEN: "",
@@ -74,4 +74,46 @@ test("quote endpoint rejects malformed bearer tokens", async () => {
   );
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+
+test("candles endpoint is protected by Google authentication", async () => {
+  const configuredEnv = {
+    ...emptyEnv,
+    UPSTOX_ANALYTICS_TOKEN: "server-only-test-token",
+    GOOGLE_CLIENT_ID: "test-client-id",
+    MGROW_ALLOWED_GOOGLE_EMAIL: "owner@example.com",
+  };
+  const response = await handleRequest(
+    new Request("https://worker.example/v1/nifty/candles"),
+    configuredEnv,
+  );
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "unauthorized" });
+});
+
+test("Upstox V3 candles are validated and sorted oldest first", () => {
+  const payload = {
+    status: "success",
+    data: {
+      candles: [
+        ["2026-11-17T09:16:00+05:30", 25010, 25020, 25005, 25015, 1200, 0],
+        ["2026-11-17T09:15:00+05:30", 25000, 25015, 24995, 25010, 900, 0],
+      ],
+    },
+  };
+  const result = extractValidCandles(payload);
+  assert.equal(result?.length, 2);
+  assert.equal(result?.[0].timestamp, "2026-11-17T09:15:00+05:30");
+  assert.equal(result?.[1].close, 25015);
+});
+
+test("Upstox V3 candle validation rejects impossible OHLC values", () => {
+  const payload = {
+    status: "success",
+    data: {
+      candles: [["2026-11-17T09:15:00+05:30", 25000, 24900, 25010, 25005, 900, 0]],
+    },
+  };
+  assert.equal(extractValidCandles(payload), null);
 });
