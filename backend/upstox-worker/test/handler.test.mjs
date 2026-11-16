@@ -113,7 +113,7 @@ test("returns validated NIFTY quote and sends bearer token only upstream", async
     upstreamRequest = { url: String(url), init };
     return new Response(JSON.stringify({
       status: "success",
-      data: { "NSE_INDEX|Nifty 50": { last_price: 24123.5, instrument_token: 123 } }
+      data: { "NSE_INDEX:Nifty 50": { last_price: 24123.5, instrument_token: 123 } }
     }), { status: 200, headers: { "content-type": "application/json" } });
   };
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
@@ -126,7 +126,7 @@ test("returns validated NIFTY quote and sends bearer token only upstream", async
 
 test("rejects malformed or non-positive quote payloads", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({
-    status: "success", data: { "NSE_INDEX|Nifty 50": { last_price: 0 } }
+    status: "success", data: { "NSE_INDEX:Nifty 50": { last_price: 0 } }
   }), { status: 200 });
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
   assert.equal(response.status, 502);
@@ -155,7 +155,7 @@ test("times out when Upstox does not respond", async () => {
 test("does not expose broker token or Google ID token in a successful response", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({
     status: "success",
-    data: { "NSE_INDEX|Nifty 50": { last_price: 25001.25 } }
+    data: { "NSE_INDEX:Nifty 50": { last_price: 25001.25 } }
   }), { status: 200 });
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
   const bodyText = await response.text();
@@ -179,7 +179,7 @@ test("ignores caller-supplied instrument query and requests only fixed NIFTY 50"
     requestedUrl = String(url);
     return new Response(JSON.stringify({
       status: "success",
-      data: { "NSE_INDEX|Nifty 50": { last_price: 25001.25 } }
+      data: { "NSE_INDEX:Nifty 50": { last_price: 25001.25 } }
     }), { status: 200 });
   };
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote?instrument_key=UNSAFE%7COTHER"), env);
