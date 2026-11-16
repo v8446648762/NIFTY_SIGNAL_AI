@@ -26,13 +26,13 @@ data class MarketDataSnapshot(
     val receivedAtMillis: Long,
     val previousClose: Double? = null,
     val dayHigh: Double? = null,
-    val dayLow: Double? = null
+    val dayLow: Double? = null,
+    val lastPrice: Double? = null
 )
 
 /**
- * Implement this boundary with a broker market-data WebSocket/REST adapter later.
- * Keep authentication and token handling inside that adapter; never pass secrets
- * into the dashboard or hard-code them in the app.
+ * Implement this boundary with a read-only market-data adapter.
+ * Keep broker authentication server-side; the dashboard never handles broker secrets.
  */
 interface MarketDataFeed {
     fun connect(listener: Listener)
