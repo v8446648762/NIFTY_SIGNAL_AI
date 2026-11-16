@@ -161,9 +161,9 @@ export function extractValidCandles(payload: unknown): Array<{
     if (!Array.isArray(row) || row.length < 6 || typeof row[0] !== "string") return null;
     const [timestamp, open, high, low, close, volume, openInterest = 0] = row;
     const time = Date.parse(timestamp);
-    const prices = [open, high, low, close];
     if (!Number.isFinite(time) || time > Date.now() + MAX_FUTURE_SKEW_MS) return null;
-    if (!prices.every((value) => typeof value === "number" && Number.isFinite(value) && value > 0)) return null;
+    if ([open, high, low, close].some((value) => typeof value !== "number" || !Number.isFinite(value) || value <= 0)) return null;
+    if (typeof open !== "number" || typeof high !== "number" || typeof low !== "number" || typeof close !== "number") return null;
     if (high < Math.max(open, close, low) || low > Math.min(open, close, high)) return null;
     if (typeof volume !== "number" || !Number.isFinite(volume) || volume < 0) return null;
     if (typeof openInterest !== "number" || !Number.isFinite(openInterest) || openInterest < 0) return null;
