@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Replace with the Google OAuth Web application client ID. This is an identifier, not a secret. -->
+    <string name="google_web_client_id" translatable="false"></string>
+</resources>
