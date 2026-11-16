@@ -3,13 +3,10 @@ package com.niftysignal.ai
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.lifecycleScope
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -45,16 +42,16 @@ import kotlin.math.min
 class MainActivity : FragmentActivity() {
     private var appUnlocked = false
     private var authenticationInProgress = false
-    private var googleSignInInProgress = false
-    // Google ID token is memory-only and authenticates the user to the Worker.
-    private var googleIdTokenForBackend: String? = null
+    private var pinLoginInProgress = false
+    // Short-lived MGrow session token is memory-only; the PIN is never persisted.
+    private var mgrowSessionToken: String? = null
 
     private fun isAppLockEnabled(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
 
     override fun onResume() {
         super.onResume()
-        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress && !googleSignInInProgress) {
+        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress && !pinLoginInProgress) {
             authenticateAppLock()
         }
     }
@@ -1103,64 +1100,40 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
-    private fun beginGoogleSignIn(statusView: TextView, signInButton: Button, clearButton: Button) {
-        val clientId = getString(R.string.google_web_client_id).trim()
-        if (clientId.isEmpty()) {
-            Toast.makeText(this, "Google Web Client ID is not configured.", Toast.LENGTH_LONG).show()
+    private fun beginPinLogin(pinInput: EditText, statusView: TextView, loginButton: Button, clearButton: Button) {
+        val pin = pinInput.text?.toString().orEmpty()
+        if (pin.length < 8) {
+            statusView.text = "Enter your MGrow PIN (minimum 8 characters)."
             return
         }
-        signInButton.isEnabled = false
-        googleSignInInProgress = true
+        val workerUrl = getString(R.string.mgrow_worker_base_url).trim().trimEnd('/')
+        if (!workerUrl.startsWith("https://")) {
+            statusView.text = "Secure MGrow Worker URL is not configured."
+            return
+        }
+        loginButton.isEnabled = false
+        pinLoginInProgress = true
         lifecycleScope.launch {
             try {
-                // Show the normal Google account picker, including accounts not previously
-                // authorized for this app. The dedicated sign-in option can cancel when no
-                // previously authorized credential is available on the device.
-                val option = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(clientId)
-                    .setAutoSelectEnabled(false)
-                    .build()
-                val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(option)
-                    .build()
-                val result = CredentialManager.create(this@MainActivity)
-                    .getCredential(this@MainActivity, request)
-                val credential = result.credential
-                if (credential is CustomCredential &&
-                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-                ) {
-                    val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                    googleIdTokenForBackend = idToken
-                    clearButton.isEnabled = true
-                    signInButton.text = "GOOGLE ACCOUNT CONNECTED"
-                    val workerUrl = getString(R.string.mgrow_worker_base_url).trim()
-                    if (workerUrl.startsWith("https://")) {
-                        attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, idToken))
-                        statusView.text = "Google signed in • Connecting to NIFTY live feed"
-                    } else {
-                        statusView.text = "Google signed in • Secure Worker URL not configured yet"
-                        updateFeedStatus(FeedConnectionState.OFFLINE, "Worker URL is not configured; live data is not connected.")
-                    }
-                } else {
-                    statusView.text = "Unsupported Google credential."
-                }
+                val token = withContext(Dispatchers.IO) { MgrowPinAuth.login(workerUrl, pin) }
+                mgrowSessionToken = token
+                pinInput.text?.clear()
+                clearButton.isEnabled = true
+                loginButton.text = "MGROW CONNECTED"
+                statusView.text = "MGrow PIN verified • Connecting to NIFTY data..."
+                attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, token))
             } catch (error: Exception) {
-                val detail = when (error.javaClass.simpleName) {
-                    "GetCredentialCancellationException" ->
-                        "Google account selection was cancelled or closed. Try again and select your Google account."
-                    "NoCredentialException" ->
-                        "No Google account is available. Add a Google account to this phone and try again."
-                    else -> "Google sign-in failed (${error.javaClass.simpleName})."
+                val detail = when (error.message) {
+                    "invalid_credentials" -> "Incorrect MGrow PIN. Try again."
+                    "login_rate_limit_exceeded" -> "Too many PIN attempts. Wait 60 seconds."
+                    "auth_secrets_not_configured" -> "MGrow PIN login is not configured on the secure server yet."
+                    else -> "MGrow login failed: ${error.message ?: error.javaClass.simpleName}"
                 }
                 statusView.text = detail
                 Toast.makeText(this@MainActivity, detail, Toast.LENGTH_LONG).show()
             } finally {
-                googleSignInInProgress = false
-                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-                    appUnlocked = false
-                }
-                signInButton.isEnabled = true
+                pinLoginInProgress = false
+                loginButton.isEnabled = true
             }
         }
     }
@@ -1183,30 +1156,38 @@ class MainActivity : FragmentActivity() {
             return row
         }
 
-        section(root, "GOOGLE ACCOUNT")
-        val googleStatus = text(
-            if (googleIdTokenForBackend == null) "Not connected" else "Google signed in • session held in memory",
+        section(root, "MGROW PIN LOGIN")
+        val authStatus = text(
+            if (mgrowSessionToken == null) "Not connected • Enter your secure MGrow PIN" else "MGrow session active in memory",
             12f, muted
         )
-        root.addView(googleStatus)
-        lateinit var clearGoogleSession: Button
-        val googleButton = Button(this).apply {
-            text = if (googleIdTokenForBackend == null) "CONTINUE WITH GOOGLE" else "GOOGLE ACCOUNT CONNECTED"
-            setOnClickListener { beginGoogleSignIn(googleStatus, this, clearGoogleSession) }
+        root.addView(authStatus)
+        val pinInput = EditText(this).apply {
+            hint = "MGrow PIN (minimum 8 characters)"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+            setTextColor(white)
+            setHintTextColor(muted)
         }
-        root.addView(googleButton)
-        clearGoogleSession = Button(this).apply {
-            text = "CLEAR GOOGLE SESSION"
-            isEnabled = googleIdTokenForBackend != null
+        root.addView(pinInput)
+        lateinit var clearSession: Button
+        val loginButton = Button(this).apply {
+            text = if (mgrowSessionToken == null) "CONNECT MGROW" else "MGROW CONNECTED"
+            setOnClickListener { beginPinLogin(pinInput, authStatus, this, clearSession) }
+        }
+        root.addView(loginButton)
+        clearSession = Button(this).apply {
+            text = "CLEAR MGROW SESSION"
+            isEnabled = mgrowSessionToken != null
             setOnClickListener {
-                googleIdTokenForBackend = null
+                mgrowSessionToken = null
                 detachMarketDataFeed()
-                googleStatus.text = "Not connected"
-                googleButton.text = "CONTINUE WITH GOOGLE"
+                authStatus.text = "Not connected"
+                loginButton.text = "CONNECT MGROW"
                 isEnabled = false
             }
         }
-        root.addView(clearGoogleSession)
+        root.addView(clearSession)
         root.addView(text(
             "Read-only market data only. Broker token stays on the secure server; no order placement.",
             10f, amber
