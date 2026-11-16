@@ -21,14 +21,25 @@ Never commit token values or put them in Android source, APKs, screenshots, chat
 - Google signing keys are cached in the Worker isolate according to Google's cache headers.
 - Upstream request timeout and strict NIFTY quote payload validation.
 - Cloudflare Rate Limiting binding is required for quote access; it keys requests to the verified owner email, uses a 30-request / 60-second window, returns HTTP 429 with Retry-After when exceeded, and fails closed if the limiter is unavailable.
+- Cloudflare's built-in rate limit is approximate and counted independently per Cloudflare location; it is an abuse-control layer, not a strict global quota.
 - Generic upstream error responses; authorization headers and tokens are not logged or forwarded.
 
+## Cloudflare Git build configuration
+For this monorepo, set the Workers Build **Root directory** to `backend/upstox-worker`.
+- Build command: `npm run build`
+- Deploy command: `npm run deploy`
+- The Cloudflare Worker project name must exactly match `mgrow-upstox-readonly` from `wrangler.toml`.
+- The rate-limit `namespace_id` is a positive integer unique within this Cloudflare account. The current value `1001` is a valid example if it is not already used by another rate-limit binding in this account; it is not a separate resource that must be provisioned.
+
+Do not select Save and Deploy until the settings and server-side secrets have been reviewed and the remaining production blockers below are resolved.
+
 ## Production blockers
-- Rate limiting code and denial/failure tests are implemented, but the Cloudflare binding still needs a real namespace/configuration and deployed verification. Monitoring and alerting remain outstanding.
 - The Android Google Credential Manager login flow is not connected.
 - The Google OAuth client ID and allowed owner email still need to be configured securely.
 - The API response receipt time is not the exchange timestamp. Add a verified exchange-time freshness check before AI analysis uses a quote.
 - Review Upstox API terms and permissions for the intended personal research/data display use before live deployment.
+- Monitoring and alerting are not configured.
+- No live Upstox request has been verified from the deployed Worker.
 - Do not deploy publicly until the remaining blockers are implemented and reviewed.
 
 ## Deployment status
