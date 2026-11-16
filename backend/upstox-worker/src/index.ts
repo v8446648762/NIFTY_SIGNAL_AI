@@ -4,13 +4,14 @@ export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
   GOOGLE_CLIENT_ID: string;
   MGROW_ALLOWED_GOOGLE_EMAIL: string;
+  QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
 const UPSTOX_BASE = "https://api.upstox.com/v2";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 
-function json(body: unknown, status = 200): Response {
+function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -19,6 +20,7 @@ function json(body: unknown, status = 200): Response {
       "pragma": "no-cache",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
+      ...extraHeaders,
     },
   });
 }
@@ -42,6 +44,19 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (!match) return json({ error: "unauthorized" }, 401);
   const identity = await verifyGoogleIdToken(match[1], env);
   if (!identity) return json({ error: "unauthorized" }, 401);
+
+  if (!env.QUOTE_LIMITER || typeof env.QUOTE_LIMITER.limit !== "function") {
+    return json({ error: "rate_limiter_not_configured" }, 503);
+  }
+  try {
+    const rateLimit = await env.QUOTE_LIMITER.limit({ key: identity.email.toLowerCase() });
+    if (!rateLimit.success) {
+      return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
+    }
+  } catch {
+    // Fail closed: do not contact the broker if the abuse-control service fails.
+    return json({ error: "rate_limiter_unavailable" }, 503);
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
