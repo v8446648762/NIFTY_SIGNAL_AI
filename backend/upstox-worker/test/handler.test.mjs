@@ -6,6 +6,7 @@ const env = {
   UPSTOX_ANALYTICS_TOKEN: "test-token",
   GOOGLE_CLIENT_ID: "mgrow-test-client.apps.googleusercontent.com",
   MGROW_ALLOWED_GOOGLE_EMAIL: "owner@example.com",
+  QUOTE_LIMITER: { limit: async () => ({ success: true }) },
 };
 const originalFetch = globalThis.fetch;
 const keyPair = await crypto.subtle.generateKey(
@@ -185,4 +186,38 @@ test("ignores caller-supplied instrument query and requests only fixed NIFTY 50"
   assert.equal(response.status, 200);
   assert.match(requestedUrl, /instrument_key=NSE_INDEX%7CNifty%2050/);
   assert.equal(requestedUrl.includes("UNSAFE"), false);
+});
+
+
+test("rejects quote access when rate limiter is not configured", async () => {
+  globalThis.fetch = async () => { throw new Error("broker must not be called"); };
+  const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), {
+    UPSTOX_ANALYTICS_TOKEN: env.UPSTOX_ANALYTICS_TOKEN,
+    GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
+    MGROW_ALLOWED_GOOGLE_EMAIL: env.MGROW_ALLOWED_GOOGLE_EMAIL,
+  });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "rate_limiter_not_configured" });
+});
+
+test("blocks a request when the rate limiter denies it", async () => {
+  let brokerCalled = false;
+  globalThis.fetch = async () => { brokerCalled = true; throw new Error("broker must not be called"); };
+  const limitedEnv = { ...env, QUOTE_LIMITER: { limit: async ({ key }) => {
+    assert.equal(key, "owner@example.com");
+    return { success: false };
+  } } };
+  const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), limitedEnv);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.equal(brokerCalled, false);
+  assert.deepEqual(await response.json(), { error: "rate_limit_exceeded" });
+});
+
+test("fails closed when the rate limiter service throws", async () => {
+  globalThis.fetch = async () => { throw new Error("broker must not be called"); };
+  const brokenEnv = { ...env, QUOTE_LIMITER: { limit: async () => { throw new Error("limiter unavailable"); } } };
+  const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), brokenEnv);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "rate_limiter_unavailable" });
 });
