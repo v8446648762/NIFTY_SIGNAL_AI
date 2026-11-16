@@ -57,7 +57,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onStop() {
-        if (isAppLockEnabled() && !authenticationInProgress && !googleSignInInProgress) appUnlocked = false
+        if (isAppLockEnabled() && !authenticationInProgress && !pinLoginInProgress) appUnlocked = false
         super.onStop()
     }
 
