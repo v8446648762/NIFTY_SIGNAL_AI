@@ -10,6 +10,8 @@ export interface Env {
 const UPSTOX_BASE = "https://api.upstox.com/v3";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
+const MAX_QUOTE_AGE_MS = 60_000;
+const MAX_FUTURE_SKEW_MS = 5_000;
 
 function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -63,7 +65,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   try {
     const upstream = await fetch(
-      `${UPSTOX_BASE}/market-quote/ltp?instrument_key=${encodeURIComponent(NIFTY_50_KEY)}`,
+      `${UPSTOX_BASE}/market-quote/quotes?instrument_key=${encodeURIComponent(NIFTY_50_KEY)}`,
       {
         method: "GET",
         headers: {
@@ -85,6 +87,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       provider: "upstox",
       instrumentKey: NIFTY_50_KEY,
       receivedAt: new Date().toISOString(),
+      quoteTimestamp: quote.timestamp,
       data: quote,
     });
   } catch (error) {
@@ -108,5 +111,10 @@ function extractValidQuote(payload: unknown): Record<string, unknown> | null {
   const record = quote as Record<string, unknown>;
   if (typeof record.last_price !== "number" || !Number.isFinite(record.last_price)) return null;
   if (record.last_price <= 0) return null;
+  if (typeof record.timestamp !== "string") return null;
+  const quoteTime = Date.parse(record.timestamp);
+  if (!Number.isFinite(quoteTime)) return null;
+  const age = Date.now() - quoteTime;
+  if (age > MAX_QUOTE_AGE_MS || age < -MAX_FUTURE_SKEW_MS) return null;
   return record;
 }
