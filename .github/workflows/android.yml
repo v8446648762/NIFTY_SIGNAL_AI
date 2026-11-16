@@ -12,6 +12,7 @@ on:
       - feature/advanced-ai-engine-v1
       - feature/testing-lab-advanced-ai-ui
       - feature/mgrow-android-live-feed
+      - feature/upstox-backend-hardening
 
 jobs:
   build:
