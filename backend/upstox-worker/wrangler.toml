@@ -1,0 +1,7 @@
+name = "mgrow-upstox-readonly"
+main = "src/index.ts"
+compatibility_date = "2026-11-16"
+
+[vars]
+# Secrets are configured separately with: npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
+# and: npx wrangler secret put MGROW_CLIENT_KEY
