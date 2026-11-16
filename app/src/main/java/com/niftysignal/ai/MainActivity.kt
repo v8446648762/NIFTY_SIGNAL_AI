@@ -1056,7 +1056,7 @@ class MainActivity : FragmentActivity() {
         val manual = loadReportRecords("manual_trades")
         val signals = loadReportRecords("ai_signals")
         val csv = StringBuilder()
-        csv.append("MANUAL TRADES\\nTime,Side,Entry,Exit,Quantity,Gross P&L\\n")
+        csv.append("MANUAL TRADES\nTime,Side,Entry,Exit,Quantity,Gross P&L\n")
         val formatter = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
         for (i in 0 until manual.length()) {
             val t = manual.optJSONObject(i) ?: continue
@@ -1065,18 +1065,18 @@ class MainActivity : FragmentActivity() {
                 .append(t.optDouble("entry")).append(',')
                 .append(t.optDouble("exit")).append(',')
                 .append(t.optInt("qty")).append(',')
-                .append(t.optDouble("pnl")).append('\\n')
+                .append(t.optDouble("pnl")).append('\n')
         }
-        csv.append("\\nAI SIGNAL LOG\\nTime,Bias,Confirmed,Trend,Index Price,Reason\\n")
+        csv.append("\nAI SIGNAL LOG\nTime,Bias,Confirmed,Trend,Index Price,Reason\n")
         for (i in 0 until signals.length()) {
             val s = signals.optJSONObject(i) ?: continue
-            val safeReason = s.optString("reason").replace(",", " ").replace("\\n", " ")
+            val safeReason = s.optString("reason").replace(",", " ").replace("\n", " ")
             csv.append(formatter.format(java.util.Date(s.optLong("time")))).append(',')
                 .append(s.optString("bias")).append(',')
                 .append(s.optBoolean("confirmed")).append(',')
                 .append(s.optString("trend")).append(',')
                 .append(s.optDouble("price")).append(',')
-                .append(safeReason).append('\\n')
+                .append(safeReason).append('\n')
         }
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/csv"
