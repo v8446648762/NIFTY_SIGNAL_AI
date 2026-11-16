@@ -13,6 +13,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Switch
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.content.Intent
 import android.widget.Toast
 import android.graphics.Canvas
 import android.graphics.Color
@@ -142,6 +145,7 @@ class MainActivity : FragmentActivity() {
     private var marketDataFeed: MarketDataFeed? = null
     private var latestSnapshot: MarketDataSnapshot? = null
     private var currentPage = "Home"
+    private var lastAiSignalKey: String? = null
     private lateinit var pageContent: LinearLayout
     private lateinit var bottomNav: LinearLayout
 
@@ -323,6 +327,7 @@ class MainActivity : FragmentActivity() {
         dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
+        recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
         val biasText = when (decision.bias) {
             TradeBias.BUY_CE -> "BUY CE"
             TradeBias.BUY_PE -> "BUY PE"
@@ -576,6 +581,12 @@ class MainActivity : FragmentActivity() {
                 section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
                 pageContent.addView(buildAlerts())
             }
+            "Reports" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "TRADING REPORTS", "MANUAL + AI PERFORMANCE")
+                pageContent.addView(buildReports())
+            }
             "Settings" -> {
                 pageContent.addView(buildHeader())
                 addGap(pageContent, 14)
@@ -792,6 +803,10 @@ class MainActivity : FragmentActivity() {
             feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts"),
             feature("Paper Trading", "Manual practice • Session only", "▤", "Tools")
         )
+        val reportsTile = feature("Reports", "Manual Trades • AI Signals • Performance", "▤", "Reports")
+        reportsTile.layoutParams = LinearLayout.LayoutParams(-1, -2)
+        root.addView(reportsTile)
+        addGap(root, 10)
         val note = text("Select a card or use the bottom navigation to open each section.", 11f, muted, true)
         note.gravity = Gravity.CENTER
         root.addView(note)
@@ -847,6 +862,228 @@ class MainActivity : FragmentActivity() {
             "Teal" -> Color.rgb(0, 190, 180)
             else -> Color.rgb(0, 213, 255)
         }
+    }
+
+
+    private fun loadReportRecords(key: String): org.json.JSONArray {
+        val raw = getSharedPreferences("mgrow_reports", MODE_PRIVATE).getString(key, "[]") ?: "[]"
+        return try { org.json.JSONArray(raw) } catch (_: Exception) { org.json.JSONArray() }
+    }
+
+    private fun saveReportRecords(key: String, records: org.json.JSONArray) {
+        getSharedPreferences("mgrow_reports", MODE_PRIVATE).edit()
+            .putString(key, records.toString()).apply()
+    }
+
+    private fun recordAiSignal(decision: SignalDecision, price: Double, receivedAt: Long) {
+        val key = "${decision.bias.name}|${decision.confirmed}|${decision.trend}"
+        if (key == lastAiSignalKey) return
+        lastAiSignalKey = key
+        val records = loadReportRecords("ai_signals")
+        val item = org.json.JSONObject().apply {
+            put("time", receivedAt)
+            put("bias", decision.bias.name)
+            put("confirmed", decision.confirmed)
+            put("trend", decision.trend)
+            put("price", price)
+            put("reason", decision.reasons.joinToString("; "))
+        }
+        records.put(item)
+        while (records.length() > 500) records.remove(0)
+        saveReportRecords("ai_signals", records)
+    }
+
+    private fun buildReports(): View {
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val manual = loadReportRecords("manual_trades")
+        val signals = loadReportRecords("ai_signals")
+        var totalPnl = 0.0
+        var wins = 0
+        var losses = 0
+        for (i in 0 until manual.length()) {
+            val trade = manual.optJSONObject(i) ?: continue
+            val pnl = trade.optDouble("pnl", 0.0)
+            totalPnl += pnl
+            if (pnl > 0.0) wins++ else if (pnl < 0.0) losses++
+        }
+        val confirmed = (0 until signals.length()).count {
+            signals.optJSONObject(it)?.optBoolean("confirmed", false) == true
+        }
+        val ceCount = (0 until signals.length()).count {
+            signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_CE.name
+        }
+        val peCount = (0 until signals.length()).count {
+            signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_PE.name
+        }
+        val waitCount = (0 until signals.length()).count {
+            signals.optJSONObject(it)?.optString("bias") == TradeBias.WAIT.name
+        }
+
+        val summary = card()
+        summary.addView(text("MANUAL TRADE PERFORMANCE", 11f, cyan, true))
+        addGap(summary, 5)
+        summary.addView(text(
+            String.format(java.util.Locale.US, "₹ %+.2f", totalPnl),
+            27f, if (totalPnl >= 0.0) green else red, true
+        ))
+        summary.addView(text("Gross P&L • before brokerage, taxes and slippage", 10f, muted))
+        addGap(summary, 10)
+        val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        metrics.addView(metric("TRADES", manual.length().toString()), LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(metric("WINS", wins.toString(), green), LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(metric("LOSSES", losses.toString(), red), LinearLayout.LayoutParams(0, -2, 1f))
+        summary.addView(metrics)
+        root.addView(summary)
+        addGap(root, 12)
+
+        val addTrade = Button(this).apply {
+            text = if (isMarathi()) "＋ मॅन्युअल ट्रेड जोडा" else "＋ ADD MANUAL TRADE"
+            setOnClickListener { showManualTradeDialog() }
+        }
+        root.addView(addTrade, LinearLayout.LayoutParams(-1, dp(48)))
+        addGap(root, 12)
+
+        val aiCard = card()
+        aiCard.addView(text("AI SIGNAL PERFORMANCE LOG", 11f, cyan, true))
+        addGap(aiCard, 7)
+        aiCard.addView(text("Recorded signal changes: ${signals.length()}", 20f, white, true))
+        aiCard.addView(text(
+            "CE: $ceCount   •   PE: $peCount   •   WAIT: $waitCount   •   Confirmed: $confirmed",
+            11f, muted
+        ))
+        addGap(aiCard, 5)
+        aiCard.addView(text(
+            if (signals.length() == 0) "No validated live AI signals recorded yet. Sample chart signals are not included."
+            else "This is a signal log, not a win-rate report. Signal outcomes need subsequent validated market candles.",
+            10f, amber
+        ))
+        root.addView(aiCard)
+        addGap(root, 12)
+
+        val history = card()
+        history.addView(text("RECENT MANUAL TRADES", 11f, cyan, true))
+        addGap(history, 7)
+        if (manual.length() == 0) {
+            history.addView(text("No manual trades recorded yet.", 12f, muted))
+        } else {
+            val formatter = java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault())
+            for (i in manual.length() - 1 downTo maxOf(0, manual.length() - 10)) {
+                val trade = manual.optJSONObject(i) ?: continue
+                val side = trade.optString("side", "CE")
+                val pnl = trade.optDouble("pnl", 0.0)
+                val line = "$side • Qty ${trade.optInt("qty")} • Entry ₹${trade.optDouble("entry")} • Exit ₹${trade.optDouble("exit")} • P&L ₹${String.format(java.util.Locale.US, "%.2f", pnl)}"
+                history.addView(text(line, 11f, if (pnl >= 0.0) green else red, true))
+                history.addView(text(formatter.format(java.util.Date(trade.optLong("time"))), 9f, muted))
+                addGap(history, 5)
+            }
+        }
+        root.addView(history)
+        addGap(root, 12)
+
+        val export = Button(this).apply {
+            text = "SHARE REPORT DATA (CSV)"
+            setOnClickListener { shareReportsCsv() }
+        }
+        root.addView(export, LinearLayout.LayoutParams(-1, dp(48)))
+        addGap(root, 6)
+        root.addView(text(
+            "Reports are saved locally on this phone. Manual P&L is gross and does not include charges. AI signal accuracy will be calculated only after outcome tracking is implemented.",
+            10f, amber
+        ))
+        return root
+    }
+
+    private fun showManualTradeDialog() {
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+        }
+        val sideSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, arrayOf("BUY CE", "BUY PE"))
+        }
+        fun input(hint: String, type: Int): EditText = EditText(this).apply {
+            this.hint = hint
+            inputType = type
+            setSingleLine(true)
+        }
+        val entry = input("Entry premium (₹)", android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val exit = input("Exit premium (₹)", android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val qty = input("Quantity (units)", android.text.InputType.TYPE_CLASS_NUMBER)
+        form.addView(text("OPTION SIDE", 10f, muted, true))
+        form.addView(sideSpinner)
+        form.addView(entry)
+        form.addView(exit)
+        form.addView(qty)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Add Manual Trade")
+            .setView(form)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("SAVE TRADE", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val buy = entry.text.toString().toDoubleOrNull()
+                val sell = exit.text.toString().toDoubleOrNull()
+                val quantity = qty.text.toString().toIntOrNull()
+                if (buy == null || sell == null || !buy.isFinite() || !sell.isFinite() ||
+                    buy <= 0.0 || sell <= 0.0 || quantity == null || quantity <= 0
+                ) {
+                    Toast.makeText(this, "Enter valid entry, exit and quantity.", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                val pnl = (sell - buy) * quantity
+                val side = if (sideSpinner.selectedItemPosition == 0) "BUY CE" else "BUY PE"
+                val records = loadReportRecords("manual_trades")
+                records.put(org.json.JSONObject().apply {
+                    put("time", System.currentTimeMillis())
+                    put("side", side)
+                    put("entry", buy)
+                    put("exit", sell)
+                    put("qty", quantity)
+                    put("pnl", pnl)
+                })
+                while (records.length() > 1000) records.remove(0)
+                saveReportRecords("manual_trades", records)
+                dialog.dismiss()
+                showPage("Reports")
+                Toast.makeText(this, "Manual trade saved.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun shareReportsCsv() {
+        val manual = loadReportRecords("manual_trades")
+        val signals = loadReportRecords("ai_signals")
+        val csv = StringBuilder()
+        csv.append("MANUAL TRADES\\nTime,Side,Entry,Exit,Quantity,Gross P&L\\n")
+        val formatter = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+        for (i in 0 until manual.length()) {
+            val t = manual.optJSONObject(i) ?: continue
+            csv.append(formatter.format(java.util.Date(t.optLong("time")))).append(',')
+                .append(t.optString("side")).append(',')
+                .append(t.optDouble("entry")).append(',')
+                .append(t.optDouble("exit")).append(',')
+                .append(t.optInt("qty")).append(',')
+                .append(t.optDouble("pnl")).append('\\n')
+        }
+        csv.append("\\nAI SIGNAL LOG\\nTime,Bias,Confirmed,Trend,Index Price,Reason\\n")
+        for (i in 0 until signals.length()) {
+            val s = signals.optJSONObject(i) ?: continue
+            val safeReason = s.optString("reason").replace(",", " ").replace("\\n", " ")
+            csv.append(formatter.format(java.util.Date(s.optLong("time")))).append(',')
+                .append(s.optString("bias")).append(',')
+                .append(s.optBoolean("confirmed")).append(',')
+                .append(s.optString("trend")).append(',')
+                .append(s.optDouble("price")).append(',')
+                .append(safeReason).append('\\n')
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_SUBJECT, "MGrow Trading Reports")
+            putExtra(Intent.EXTRA_TEXT, csv.toString())
+        }
+        startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
     private fun buildSettings(): View {
