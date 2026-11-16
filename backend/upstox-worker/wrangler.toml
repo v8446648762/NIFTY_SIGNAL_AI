@@ -3,11 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2026-11-16"
 
 [vars]
-# Set GOOGLE_CLIENT_ID and MGROW_ALLOWED_GOOGLE_EMAIL as non-secret Worker variables.
-# Set UPSTOX_ANALYTICS_TOKEN with: npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
+# Set Cloudflare Worker secrets: UPSTOX_ANALYTICS_TOKEN, MGROW_APP_PIN (8+ chars), MGROW_SESSION_SECRET (32+ random chars).
 
 [[ratelimits]]
 name = "QUOTE_LIMITER"
 # Must be a positive integer unique within this Cloudflare account.
 namespace_id = "1001"
 simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1002"
+simple = { limit = 5, period = 60 }
