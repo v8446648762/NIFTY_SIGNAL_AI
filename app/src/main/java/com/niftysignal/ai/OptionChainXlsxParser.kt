@@ -70,27 +70,27 @@ object OptionChainXlsxParser {
             ?: throw IllegalArgumentException("First worksheet was not found in this XLSX file.")
         val shared = entries["xl/sharedStrings.xml"]?.let(::readSharedStrings) ?: emptyList()
         val rows = readSheet(sheet, shared)
-        val header = rows[2] ?: throw IllegalArgumentException("Option-chain header row is missing.")
-        if (header[12]?.equals("STRIKE", true) != true ||
+        val header = rows[1] ?: throw IllegalArgumentException("Option-chain header row is missing.")
+        if (header[11]?.equals("STRIKE", true) != true ||
             header[2]?.contains("CHNG IN OI", true) != true ||
-            header[22]?.equals("OI", true) != true
+            header[21]?.equals("OI", true) != true
         ) {
             throw IllegalArgumentException("This worksheet does not match the supported NIFTY option-chain column layout.")
         }
 
         val warnings = mutableListOf<String>()
-        val data = rows.filterKeys { it >= 3 }.mapNotNull { (_, cells) ->
-            val strike = cells[12]?.numberOrNull() ?: return@mapNotNull null
+        val data = rows.filterKeys { it >= 2 }.mapNotNull { (_, cells) ->
+            val strike = cells[11]?.numberOrNull() ?: return@mapNotNull null
             OptionChainStrike(
                 strike = strike,
-                callOi = cells[2]?.numberOrNull(),
-                callOiChange = cells[3]?.numberOrNull(),
-                callVolume = cells[4]?.numberOrNull(),
-                callLtp = cells[6]?.numberOrNull(),
-                putOi = cells[22]?.numberOrNull(),
-                putOiChange = cells[21]?.numberOrNull(),
-                putVolume = cells[20]?.numberOrNull(),
-                putLtp = cells[18]?.numberOrNull()
+                callOi = cells[1]?.numberOrNull(),
+                callOiChange = cells[2]?.numberOrNull(),
+                callVolume = cells[3]?.numberOrNull(),
+                callLtp = cells[5]?.numberOrNull(),
+                putOi = cells[21]?.numberOrNull(),
+                putOiChange = cells[20]?.numberOrNull(),
+                putVolume = cells[19]?.numberOrNull(),
+                putLtp = cells[17]?.numberOrNull()
             )
         }.sortedBy { it.strike }
 
