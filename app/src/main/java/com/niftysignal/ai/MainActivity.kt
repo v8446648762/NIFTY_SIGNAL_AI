@@ -1125,12 +1125,13 @@ class MainActivity : FragmentActivity() {
             12f, muted
         )
         root.addView(googleStatus)
+        lateinit var googleSignOut: Button
         val googleButton = Button(this).apply {
             text = if (googleIdTokenForBackend == null) "CONTINUE WITH GOOGLE" else "GOOGLE SIGN-IN READY"
-            setOnClickListener { beginGoogleSignIn(googleStatus, this) }
+            setOnClickListener { beginGoogleSignIn(googleStatus, this, googleSignOut) }
         }
         root.addView(googleButton)
-        val googleSignOut = Button(this).apply {
+        googleSignOut = Button(this).apply {
             text = "CLEAR GOOGLE SESSION"
             isEnabled = googleIdTokenForBackend != null
             setOnClickListener {
