@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Public OAuth Web client ID; never place broker access tokens here. -->
-    <string name="google_web_client_id" translatable="false">352489654272-strnf2vilnrqeabt9u5ggfb7pe1bkela.apps.googleusercontent.com</string>
     <!-- Set only after the read-only Worker is deployed and reviewed. -->
     <string name="mgrow_worker_base_url" translatable="false">https://mgrow-upstox-readonly.vikaskalburgi130.workers.dev</string>
 </resources>
