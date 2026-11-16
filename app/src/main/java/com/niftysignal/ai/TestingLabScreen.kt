@@ -160,17 +160,17 @@ object TestingLabScreen {
                 val one = sampleCandles(5, 60_000L)
                 val result = AdvancedAiEngine.evaluate(five, one, optionSnapshot, now)
                 aiResult.text = buildString {
-                    append("TEST MODE: DEMO CANDLES + IMPORTED OPTION CHAIN\\n")
-                    append("SIGNAL: ${result.bias.name} • ${result.confidenceLabel}\\n")
-                    append("TREND: ${result.trend}\\n")
-                    append("Bullish score: ${result.bullishScore} / 100\\n")
-                    append("Bearish score: ${result.bearishScore} / 100\\n")
-                    append("PCR: ${result.optionChainPcr?.let { String.format(java.util.Locale.US, "%.3f", it) } ?: "N/A"}\\n")
-                    append("Support: ${result.support?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—"}\\n")
-                    append("Resistance: ${result.resistance?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—"}\\n\\n")
-                    append("REASONS\\n"); result.reasons.forEach { append("• $it\\n") }
-                    if (result.warnings.isNotEmpty()) { append("\\nWARNINGS\\n"); result.warnings.forEach { append("• $it\\n") } }
-                    append("\\nमहत्त्वाचे: हा live NIFTY signal नाही. 5m/1m candles कृत्रिम DEMO आहेत. वास्तविक signal साठी timestamped वास्तविक candles आवश्यक आहेत.")
+                    append("TEST MODE: DEMO CANDLES + IMPORTED OPTION CHAIN\n")
+                    append("SIGNAL: ${result.bias.name} • ${result.confidenceLabel}\n")
+                    append("TREND: ${result.trend}\n")
+                    append("Bullish score: ${result.bullishScore} / 100\n")
+                    append("Bearish score: ${result.bearishScore} / 100\n")
+                    append("PCR: ${result.optionChainPcr?.let { String.format(java.util.Locale.US, "%.3f", it) } ?: "N/A"}\n")
+                    append("Support: ${result.support?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—"}\n")
+                    append("Resistance: ${result.resistance?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—"}\n\n")
+                    append("REASONS\n"); result.reasons.forEach { append("• $it\n") }
+                    if (result.warnings.isNotEmpty()) { append("\nWARNINGS\n"); result.warnings.forEach { append("• $it\n") } }
+                    append("\nमहत्त्वाचे: हा live NIFTY signal नाही. 5m/1m candles कृत्रिम DEMO आहेत. वास्तविक signal साठी timestamped वास्तविक candles आवश्यक आहेत.")
                 }
                 aiResult.setTextColor(white)
             }
@@ -228,13 +228,13 @@ object TestingLabScreen {
                 )
                 val report = HistoricalBacktestMetrics.calculate(backtestTrades)
                 metricsText.text = buildString {
-                    append("Trades: ${report.tradeCount} • Wins: ${report.winningTrades} • Losses: ${report.losingTrades}\\n")
-                    append("Win rate: ${String.format(java.util.Locale.US, "%.1f", report.winRatePercent)}%\\n")
-                    append("Net P&L: ₹${String.format(java.util.Locale.US, "%.2f", report.netPnl)}\\n")
-                    append("Profit factor: ${report.profitFactor?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "Undefined"}\\n")
-                    append("Max drawdown: ₹${String.format(java.util.Locale.US, "%.2f", report.maximumDrawdown)}\\n")
-                    append("Average P&L / trade: ₹${String.format(java.util.Locale.US, "%.2f", report.averagePnlPerTrade)}\\n")
-                    report.warnings.forEach { append("• $it\\n") }
+                    append("Trades: ${report.tradeCount} • Wins: ${report.winningTrades} • Losses: ${report.losingTrades}\n")
+                    append("Win rate: ${String.format(java.util.Locale.US, "%.1f", report.winRatePercent)}%\n")
+                    append("Net P&L: ₹${String.format(java.util.Locale.US, "%.2f", report.netPnl)}\n")
+                    append("Profit factor: ${report.profitFactor?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "Undefined"}\n")
+                    append("Max drawdown: ₹${String.format(java.util.Locale.US, "%.2f", report.maximumDrawdown)}\n")
+                    append("Average P&L / trade: ₹${String.format(java.util.Locale.US, "%.2f", report.averagePnlPerTrade)}\n")
+                    report.warnings.forEach { append("• $it\n") }
                 }
                 metricsText.setTextColor(white)
                 entryInput.text.clear(); exitInput.text.clear(); qtyInput.text.clear()
