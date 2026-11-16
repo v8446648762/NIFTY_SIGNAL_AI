@@ -7,7 +7,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.lifecycleScope
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import android.app.AlertDialog
@@ -1113,12 +1113,13 @@ class MainActivity : FragmentActivity() {
         googleSignInInProgress = true
         lifecycleScope.launch {
             try {
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(clientId)
+                // This button explicitly starts Google sign-in, so use the
+                // dedicated Sign in with Google option rather than the
+                // passive account/password credential discovery option.
+                val googleSignInOption = GetSignInWithGoogleOption.Builder(clientId)
                     .build()
                 val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
+                    .addCredentialOption(googleSignInOption)
                     .build()
                 val credentialManager = CredentialManager.create(this@MainActivity)
                 val result = credentialManager.getCredential(this@MainActivity, request)
