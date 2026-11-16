@@ -3,6 +3,13 @@ package com.niftysignal.ai
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.lifecycle.lifecycleScope
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -38,6 +45,8 @@ import kotlin.math.min
 class MainActivity : FragmentActivity() {
     private var appUnlocked = false
     private var authenticationInProgress = false
+    // Kept in memory only; never persisted to preferences, logs, or APK resources.
+    private var googleIdTokenForBackend: String? = null
 
     private fun isAppLockEnabled(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
@@ -1109,6 +1118,35 @@ class MainActivity : FragmentActivity() {
             row.addView(text(subtitle, 11f, muted))
             return row
         }
+
+        section(root, if (isMarathi()) "GOOGLE ACCOUNT" else "GOOGLE ACCOUNT")
+        val googleStatus = text(
+            if (googleIdTokenForBackend == null) "Google account not connected" else "Google ID token received in memory",
+            12f, muted
+        )
+        root.addView(googleStatus)
+        val googleButton = Button(this).apply {
+            text = if (googleIdTokenForBackend == null) "CONTINUE WITH GOOGLE" else "GOOGLE SIGN-IN READY"
+            setOnClickListener { beginGoogleSignIn(googleStatus, this) }
+        }
+        root.addView(googleButton)
+        val googleSignOut = Button(this).apply {
+            text = "CLEAR GOOGLE SESSION"
+            isEnabled = googleIdTokenForBackend != null
+            setOnClickListener {
+                googleIdTokenForBackend = null
+                googleStatus.text = "Google account not connected"
+                googleButton.text = "CONTINUE WITH GOOGLE"
+                isEnabled = false
+                Toast.makeText(this@MainActivity, "Google session cleared from memory.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        root.addView(googleSignOut)
+        root.addView(text(
+            "Sign-in foundation only: the token stays in memory and is not yet sent to Cloudflare. Backend URL and OAuth client ID must be configured before live API access.",
+            10f, amber
+        ))
+        addGap(root, 12)
 
         val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
         root.addView(settingRow(
