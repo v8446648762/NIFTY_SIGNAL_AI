@@ -7,7 +7,7 @@ export interface Env {
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
-const UPSTOX_BASE = "https://api.upstox.com/v2";
+const UPSTOX_BASE = "https://api.upstox.com/v3";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 
@@ -102,7 +102,8 @@ function extractValidQuote(payload: unknown): Record<string, unknown> | null {
   const root = payload as Record<string, unknown>;
   if (root.status !== "success" || !root.data || typeof root.data !== "object") return null;
   const data = root.data as Record<string, unknown>;
-  const quote = data[NIFTY_50_KEY];
+  const responseKey = NIFTY_50_KEY.replace("|", ":");
+  const quote = data[responseKey];
   if (!quote || typeof quote !== "object" || Array.isArray(quote)) return null;
   const record = quote as Record<string, unknown>;
   if (typeof record.last_price !== "number" || !Number.isFinite(record.last_price)) return null;
