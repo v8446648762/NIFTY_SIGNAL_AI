@@ -22,7 +22,9 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
     private var pollJob: Job? = null
 
     override fun connect(listener: MarketDataFeed.Listener) {
-        disconnect()
+        val sessionToken = idToken
+        stopPolling()
+        idToken = sessionToken
         if (baseUrl.isBlank() || !baseUrl.startsWith("https://")) {
             listener.onStatusChanged(FeedConnectionState.ERROR, "Secure MGrow Worker URL is not configured.")
             return
@@ -87,11 +89,15 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
     }
 
     override fun disconnect() {
+        stopPolling()
+        idToken = null
+    }
+
+    private fun stopPolling() {
         pollJob?.cancel()
         pollJob = null
         scope?.cancel()
         scope = null
-        idToken = null
     }
 
     private fun getJson(path: String): JSONObject {
