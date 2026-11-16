@@ -7,7 +7,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.lifecycleScope
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import android.app.AlertDialog
@@ -1113,8 +1113,17 @@ class MainActivity : FragmentActivity() {
         googleSignInInProgress = true
         lifecycleScope.launch {
             try {
-                val option = GetSignInWithGoogleOption.Builder(clientId).build()
-                val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+                // Show the normal Google account picker, including accounts not previously
+                // authorized for this app. The dedicated sign-in option can cancel when no
+                // previously authorized credential is available on the device.
+                val option = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(clientId)
+                    .setAutoSelectEnabled(false)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(option)
+                    .build()
                 val result = CredentialManager.create(this@MainActivity)
                     .getCredential(this@MainActivity, request)
                 val credential = result.credential
@@ -1137,8 +1146,15 @@ class MainActivity : FragmentActivity() {
                     statusView.text = "Unsupported Google credential."
                 }
             } catch (error: Exception) {
-                statusView.text = "Google sign-in failed (${error.javaClass.simpleName})."
-                Toast.makeText(this@MainActivity, statusView.text, Toast.LENGTH_LONG).show()
+                val detail = when (error.javaClass.simpleName) {
+                    "GetCredentialCancellationException" ->
+                        "Google account selection was cancelled or closed. Try again and select your Google account."
+                    "NoCredentialException" ->
+                        "No Google account is available. Add a Google account to this phone and try again."
+                    else -> "Google sign-in failed (${error.javaClass.simpleName})."
+                }
+                statusView.text = detail
+                Toast.makeText(this@MainActivity, detail, Toast.LENGTH_LONG).show()
             } finally {
                 googleSignInInProgress = false
                 if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
