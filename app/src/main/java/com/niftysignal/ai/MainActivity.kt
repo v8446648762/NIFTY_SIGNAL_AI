@@ -587,6 +587,11 @@ class MainActivity : FragmentActivity() {
                 section(pageContent, "TRADING REPORTS", "MANUAL + AI PERFORMANCE")
                 pageContent.addView(buildReports())
             }
+            "Testing" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                pageContent.addView(TestingLabScreen.create(this))
+            }
             "Settings" -> {
                 pageContent.addView(buildHeader())
                 addGap(pageContent, 14)
@@ -614,6 +619,7 @@ class MainActivity : FragmentActivity() {
             Triple("AI", "✦", "AI"),
             Triple("Alerts", "♧", if (isMarathi()) "अलर्ट" else "Alerts"),
             Triple("Tools", "⚙", if (isMarathi()) "टूल्स" else "Tools"),
+            Triple("Testing", "⌁", if (isMarathi()) "टेस्ट" else "Test"),
             Triple("Settings", "☷", if (isMarathi()) "सेटिंग" else "Settings")
         )
         items.forEach { item ->
