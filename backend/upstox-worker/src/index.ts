@@ -61,8 +61,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     return json({ error: "server_secrets_not_configured" }, 503);
   }
   const authorization = request.headers.get("authorization") ?? "";
-  const match = authorization.match(/^Bearer ([^\\s]+)$/i);
-  if (!match || !(await verifySessionToken(match[1], env.MGROW_SESSION_SECRET))) return json({ error: "unauthorized" }, 401);
+  const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (!bearer || bearer.trim() !== bearer || !(await verifySessionToken(bearer, env.MGROW_SESSION_SECRET))) return json({ error: "unauthorized" }, 401);
   if (!env.QUOTE_LIMITER || typeof env.QUOTE_LIMITER.limit !== "function") return json({ error: "rate_limiter_not_configured" }, 503);
   try {
     const rateLimit = await env.QUOTE_LIMITER.limit({ key: "mgrow-owner" });
