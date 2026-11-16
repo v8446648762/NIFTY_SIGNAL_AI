@@ -1101,6 +1101,51 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
+    private fun beginGoogleSignIn(statusView: TextView, signInButton: Button, clearButton: Button) {
+        val clientId = getString(R.string.google_web_client_id).trim()
+        if (clientId.isEmpty()) {
+            Toast.makeText(this, "Google Web Client ID is not configured yet.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        signInButton.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(clientId)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+                val credentialManager = CredentialManager.create(this@MainActivity)
+                val result = credentialManager.getCredential(this@MainActivity, request)
+                val credential = result.credential
+
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    googleIdTokenForBackend = googleCredential.idToken
+                    statusView.text = "Google ID token received in memory"
+                    signInButton.text = "GOOGLE SIGN-IN READY"
+                    clearButton.isEnabled = true
+                    Toast.makeText(this@MainActivity, "Google sign-in successful.", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Unsupported Google credential.", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Google sign-in failed: ${e.localizedMessage ?: "Please try again."}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                signInButton.isEnabled = true
+            }
+        }
+    }
+
     private fun buildSettings(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
