@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/testing-lab-isolated
+      - feature/advanced-ai-engine-v1
 
 jobs:
   build:
