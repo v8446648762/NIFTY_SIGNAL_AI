@@ -230,3 +230,28 @@ test("rejects quote timestamps too far in the future", async () => {
   assert.equal(response.status, 502);
   assert.deepEqual(await response.json(), { error: "invalid_upstream_payload" });
 });
+
+test("rejects an ID token issued more than one hour ago", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = await makeToken({ iat: now - 3700, exp: now + 100 });
+  assert.equal(await verifyGoogleIdToken(token, env), null);
+});
+
+test("rejects an ID token with an excessive lifetime", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = await makeToken({ iat: now, exp: now + 7200 });
+  assert.equal(await verifyGoogleIdToken(token, env), null);
+});
+
+test("requires the authorized presenter for multiple audiences", async () => {
+  const token = await makeToken({ aud: [env.GOOGLE_CLIENT_ID, "another-client.apps.googleusercontent.com"] });
+  assert.equal(await verifyGoogleIdToken(token, env), null);
+});
+
+test("accepts multiple audiences only when azp matches this client", async () => {
+  const token = await makeToken({
+    aud: [env.GOOGLE_CLIENT_ID, "another-client.apps.googleusercontent.com"],
+    azp: env.GOOGLE_CLIENT_ID,
+  });
+  assert.ok(await verifyGoogleIdToken(token, env));
+});
