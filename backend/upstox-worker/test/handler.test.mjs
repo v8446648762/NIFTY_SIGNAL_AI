@@ -74,3 +74,19 @@ test("maps upstream failures to a safe error", async () => {
   assert.equal(response.status, 502);
   assert.deepEqual(await response.json(), { error: "upstream_market_data_error", upstreamStatus: 401 });
 });
+
+
+test("times out when Upstox does not respond", async () => {
+  globalThis.fetch = async (_url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener("abort", () => {
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      reject(error);
+    }, { once: true });
+  });
+  const response = await handleRequest(new Request("https://worker.test/v1/nifty/quote", {
+    headers: { "x-mgrow-client-key": "test-client-key" }
+  }), env);
+  assert.equal(response.status, 504);
+  assert.deepEqual(await response.json(), { error: "upstream_timeout" });
+});
