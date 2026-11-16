@@ -20,10 +20,11 @@ Never commit token values or put them in Android source, APKs, screenshots, chat
 - Google ID tokens are checked server-side: RS256 signature against Google's published signing keys, issuer, exact client audience, expiry, issued-at time, verified email, and the configured owner email.
 - Google signing keys are cached in the Worker isolate according to Google's cache headers.
 - Upstream request timeout and strict NIFTY quote payload validation.
+- Cloudflare Rate Limiting binding is required for quote access; it keys requests to the verified owner email, uses a 30-request / 60-second window, returns HTTP 429 with Retry-After when exceeded, and fails closed if the limiter is unavailable.
 - Generic upstream error responses; authorization headers and tokens are not logged or forwarded.
 
 ## Production blockers
-- Rate limiting, monitoring, and abuse controls are not yet implemented.
+- Rate limiting code and denial/failure tests are implemented, but the Cloudflare binding still needs a real namespace/configuration and deployed verification. Monitoring and alerting remain outstanding.
 - The Android Google Credential Manager login flow is not connected.
 - The Google OAuth client ID and allowed owner email still need to be configured securely.
 - The API response receipt time is not the exchange timestamp. Add a verified exchange-time freshness check before AI analysis uses a quote.
