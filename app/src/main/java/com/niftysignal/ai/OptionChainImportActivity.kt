@@ -32,10 +32,12 @@ class OptionChainImportActivity : Activity() {
             finish()
             return
         }
+        var parsedAnalysis: OptionChainAnalysis? = null
         val report = try {
             val uri = data.data!!
             val analysis = contentResolver.openInputStream(uri)?.use { OptionChainXlsxParser.parse(it) }
                 ?: throw IllegalArgumentException("The selected file could not be opened.")
+            parsedAnalysis = analysis
             "FILE: ${uri.lastPathSegment ?: "Selected XLSX"}\n\n" + analysis.asReport()
         } catch (error: Exception) {
             "IMPORT FAILED\n${error.message ?: "The workbook could not be read."}\n\nPlease select an .xlsx NIFTY option-chain workbook."
