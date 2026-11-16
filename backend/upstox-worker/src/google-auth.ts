@@ -6,6 +6,7 @@ export interface GoogleAuthEnv {
 type GoogleClaims = {
   iss?: string;
   aud?: string | string[];
+  azp?: string;
   exp?: number;
   iat?: number;
   email?: string;
@@ -19,6 +20,7 @@ let cacheExpiresAt = 0;
 
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const CLOCK_SKEW_SECONDS = 60;
+const MAX_TOKEN_AGE_SECONDS = 3600;
 
 function decodeSegment(segment: string): Uint8Array {
   const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
@@ -68,16 +70,26 @@ export async function verifyGoogleIdToken(
     const issuerValid =
       claims.iss === "https://accounts.google.com" ||
       claims.iss === "accounts.google.com";
-    const audienceValid = Array.isArray(claims.aud)
-      ? claims.aud.includes(env.GOOGLE_CLIENT_ID)
-      : claims.aud === env.GOOGLE_CLIENT_ID;
+    const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    const audienceValid = audiences.includes(env.GOOGLE_CLIENT_ID);
+    // When a token has multiple audiences, Google requires the authorized
+    // presenter (azp) to identify the client to which the token was issued.
+    const authorizedPresenterValid =
+      audiences.length <= 1 || claims.azp === env.GOOGLE_CLIENT_ID;
+    const timestampsValid =
+      typeof claims.exp === "number" &&
+      typeof claims.iat === "number" &&
+      claims.exp > nowSeconds &&
+      claims.iat <= nowSeconds + CLOCK_SKEW_SECONDS &&
+      claims.iat >= nowSeconds - MAX_TOKEN_AGE_SECONDS - CLOCK_SKEW_SECONDS &&
+      claims.exp > claims.iat &&
+      claims.exp - claims.iat <= MAX_TOKEN_AGE_SECONDS + CLOCK_SKEW_SECONDS;
+
     if (
       !issuerValid ||
       !audienceValid ||
-      typeof claims.exp !== "number" ||
-      claims.exp <= nowSeconds ||
-      typeof claims.iat !== "number" ||
-      claims.iat > nowSeconds + CLOCK_SKEW_SECONDS ||
+      !authorizedPresenterValid ||
+      !timestampsValid ||
       claims.email_verified !== true ||
       typeof claims.email !== "string" ||
       claims.email.toLowerCase() !== env.MGROW_ALLOWED_GOOGLE_EMAIL.toLowerCase()
