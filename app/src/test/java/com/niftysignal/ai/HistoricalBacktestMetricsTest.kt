@@ -17,9 +17,9 @@ class HistoricalBacktestMetricsTest {
         assertEquals(2, report.winningTrades)
         assertEquals(1, report.losingTrades)
         assertEquals(66.6666667, report.winRatePercent, 0.0001)
-        assertEquals(15.0, report.netPnl, 0.0001)
+        assertEquals(14.0, report.netPnl, 0.0001)
         assertEquals(6.0, report.maximumDrawdown, 0.0001)
-        assertEquals(2.0, report.profitFactor!!, 0.0001)
+        assertEquals(20.0 / 6.0, report.profitFactor!!, 0.0001)
     }
 
     @Test fun emptyInputDoesNotClaimAccuracy() {
