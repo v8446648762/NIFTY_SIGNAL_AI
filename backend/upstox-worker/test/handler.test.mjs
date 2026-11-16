@@ -90,3 +90,47 @@ test("times out when Upstox does not respond", async () => {
   assert.equal(response.status, 504);
   assert.deepEqual(await response.json(), { error: "upstream_timeout" });
 });
+
+
+test("does not expose broker token or client key in a successful response", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "success",
+    data: { "NSE_INDEX|Nifty 50": { last_price: 25001.25 } }
+  }), { status: 200 });
+  const response = await handleRequest(new Request("https://worker.test/v1/nifty/quote", {
+    headers: { "x-mgrow-client-key": "test-client-key" }
+  }), env);
+  const bodyText = await response.text();
+  assert.equal(bodyText.includes("test-token"), false);
+  assert.equal(bodyText.includes("test-client-key"), false);
+  assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+});
+
+test("does not expose broker response body when Upstox rejects the token", async () => {
+  globalThis.fetch = async () => new Response("sensitive broker diagnostic", { status: 401 });
+  const response = await handleRequest(new Request("https://worker.test/v1/nifty/quote", {
+    headers: { "x-mgrow-client-key": "test-client-key" }
+  }), env);
+  const bodyText = await response.text();
+  assert.equal(bodyText.includes("sensitive broker diagnostic"), false);
+  assert.equal(bodyText.includes("test-token"), false);
+  assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+});
+
+test("ignores caller-supplied instrument query and requests only fixed NIFTY 50", async () => {
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return new Response(JSON.stringify({
+      status: "success",
+      data: { "NSE_INDEX|Nifty 50": { last_price: 25001.25 } }
+    }), { status: 200 });
+  };
+  const response = await handleRequest(new Request(
+    "https://worker.test/v1/nifty/quote?instrument_key=UNSAFE%7COTHER",
+    { headers: { "x-mgrow-client-key": "test-client-key" } }
+  ), env);
+  assert.equal(response.status, 200);
+  assert.match(requestedUrl, /instrument_key=NSE_INDEX%7CNifty%2050/);
+  assert.equal(requestedUrl.includes("UNSAFE"), false);
+});
