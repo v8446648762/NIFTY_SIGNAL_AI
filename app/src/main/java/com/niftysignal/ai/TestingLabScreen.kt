@@ -23,6 +23,12 @@ object TestingLabScreen {
     private val cyan = Color.rgb(0, 213, 255)
     private val amber = Color.rgb(255, 200, 87)
     @Volatile private var optionChainResultView: TextView? = null
+    @Volatile private var latestOptionChainAnalysis: OptionChainAnalysis? = null
+
+    fun setOptionChainAnalysis(analysis: OptionChainAnalysis, report: String) {
+        latestOptionChainAnalysis = analysis
+        displayOptionChainAnalysis(report)
+    }
 
     fun displayOptionChainAnalysis(report: String) {
         optionChainResultView?.post {
