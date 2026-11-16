@@ -38,8 +38,8 @@ object HistoricalBacktestMetrics {
                 listOf("No completed trades supplied; performance cannot be measured."))
         }
         val pnls = trades.sortedBy { it.exitTimeMillis }.map { trade ->
-            val direction = if (trade.side == TradeBias.BUY_CE) 1.0 else -1.0
-            (trade.exitPrice - trade.entryPrice) * direction * trade.quantity - trade.feesAndSlippage
+            // Both BUY_CE and BUY_PE are long option-premium positions: a rising premium is profitable for either.
+            (trade.exitPrice - trade.entryPrice) * trade.quantity - trade.feesAndSlippage
         }
         val wins = pnls.count { it > 0.0 }
         val losses = pnls.count { it < 0.0 }
