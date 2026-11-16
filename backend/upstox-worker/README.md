@@ -4,7 +4,7 @@ This isolated Cloudflare Worker is a development scaffold. It is not deployed an
 
 ## Endpoints
 - `GET /health`: worker status only; does not contact Upstox.
-- `GET /v1/nifty/quote`: fixed NIFTY 50 index LTP request using the Upstox Analytics Token. Requires a Google ID token in the Authorization Bearer header.
+- `GET /v1/nifty/quote`: fixed NIFTY 50 index LTP request using Upstox Market Quote V3 using the Upstox Analytics Token. Requires a Google ID token in the Authorization Bearer header.
 
 ## Server-side configuration
 Configure these values only in the Cloudflare Worker environment:
@@ -19,7 +19,7 @@ Never commit token values or put them in Android source, APKs, screenshots, chat
 - Upstox token remains server-side; response caching disabled.
 - Google ID tokens are checked server-side: RS256 signature against Google's published signing keys, issuer, exact client audience, expiry, issued-at time, verified email, and the configured owner email.
 - Google signing keys are cached in the Worker isolate according to Google's cache headers.
-- Upstream request timeout and strict NIFTY quote payload validation.
+- Upstream request timeout, strict NIFTY quote payload validation, and the current V3 LTP endpoint.
 - Cloudflare Rate Limiting binding is required for quote access; it keys requests to the verified owner email, uses a 30-request / 60-second window, returns HTTP 429 with Retry-After when exceeded, and fails closed if the limiter is unavailable.
 - Cloudflare's built-in rate limit is approximate and counted independently per Cloudflare location; it is an abuse-control layer, not a strict global quota.
 - Generic upstream error responses; authorization headers and tokens are not logged or forwarded.
