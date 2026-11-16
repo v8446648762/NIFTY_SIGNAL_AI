@@ -1,10 +1,10 @@
 package com.niftysignal.ai
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -21,8 +21,15 @@ object TestingLabScreen {
     private val white = Color.WHITE
     private val muted = Color.rgb(195, 208, 226)
     private val cyan = Color.rgb(0, 213, 255)
-    private val green = Color.rgb(0, 200, 150)
     private val amber = Color.rgb(255, 200, 87)
+    @Volatile private var optionChainResultView: TextView? = null
+
+    fun displayOptionChainAnalysis(report: String) {
+        optionChainResultView?.post {
+            optionChainResultView?.text = report
+            optionChainResultView?.setTextColor(white)
+        }
+    }
 
     fun create(context: Context): View {
         val content = LinearLayout(context).apply {
@@ -41,7 +48,7 @@ object TestingLabScreen {
         })
         content.addView(space(context, 12))
         val result = card(context)
-        result.addView(label(context, "TEST RESULT", 15f, cyan, true))
+        result.addView(label(context, "SAMPLE TEST RESULT", 15f, cyan, true))
         val resultText = label(context, "Test अजून चालवलेली नाही. Run Sample Test दाबा.", 13f, muted)
         result.addView(resultText)
         content.addView(result)
@@ -71,12 +78,31 @@ object TestingLabScreen {
             }
         }
         content.addView(run)
+        content.addView(space(context, 16))
+
+        content.addView(label(context, "Excel Option Chain Test", 18f, white, true))
+        content.addView(label(context, "तुझी NIFTY Option Chain .xlsx फाइल इथून निवड. फाइल फोनवरच वाचली जाईल; कोणत्याही server वर upload होणार नाही.", 13f, muted))
+        content.addView(space(context, 8))
+        val importButton = Button(context).apply {
+            text = "IMPORT OPTION CHAIN XLSX"
+            setTextColor(Color.BLACK)
+            setBackgroundColor(cyan)
+            setOnClickListener {
+                context.startActivity(Intent(context, OptionChainImportActivity::class.java))
+            }
+        }
+        content.addView(importButton)
         content.addView(space(context, 10))
-        content.addView(label(context, "Excel Option Chain Test", 17f, white, true))
-        content.addView(label(context, "Excel file upload आणि OI / Change in OI / PCR / strike-wise CE-PE analysis पुढील टप्प्यात जोडू. आधी तुझी workbook पाहून columns आणि timestamps पडताळू; त्यानुसार parser व tests बनवू.", 13f, muted))
-        content.addView(space(context, 12))
-        content.addView(label(context, "SAFETY", 14f, amber, true))
-        content.addView(label(context, "Demo results Reports किंवा Live AI Signals मध्ये save होत नाहीत. Live feed state आणि existing trade records या screen मधून बदलत नाहीत.", 12f, muted))
+        val analysisCard = card(context)
+        analysisCard.addView(label(context, "OPTION CHAIN ANALYSIS RESULT", 14f, cyan, true))
+        val analysisText = label(context, "अजून Excel फाइल import केलेली नाही.", 12f, muted)
+        optionChainResultView = analysisText
+        analysisCard.addView(analysisText)
+        content.addView(analysisCard)
+
+        content.addView(space(context, 14))
+        content.addView(label(context, "TESTING LAB SAFETY", 14f, amber, true))
+        content.addView(label(context, "Excel analysis offline आणि या विभागापुरतेच आहे. डेटा Live Dashboard, Live AI Signals किंवा Reports मध्ये पाठवला जात नाही. Snapshot मधील OI levels हे हमखास support/resistance किंवा trade signal नाहीत. Accuracy मोजण्यासाठी अनेक timestamped snapshots आणि पुढील NIFTY price data आवश्यक आहे.", 12f, muted))
         return scroll
     }
 
