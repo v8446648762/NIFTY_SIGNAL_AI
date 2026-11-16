@@ -1137,9 +1137,14 @@ class MainActivity : FragmentActivity() {
                     Toast.makeText(this@MainActivity, "Unsupported Google credential.", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
+                // Show exception type and message for diagnosis without exposing tokens.
+                val errorType = e.javaClass.simpleName.ifBlank { "UnknownError" }
+                val errorMessage = e.localizedMessage ?: "Please try again."
+                val diagnostic = "$errorType: $errorMessage"
+                statusView.text = "Google sign-in failed ($diagnostic)"
                 Toast.makeText(
                     this@MainActivity,
-                    "Google sign-in failed: ${e.localizedMessage ?: "Please try again."}",
+                    "Google sign-in failed ($diagnostic)",
                     Toast.LENGTH_LONG
                 ).show()
             } finally {
