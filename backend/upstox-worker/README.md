@@ -1,34 +1,30 @@
-# MGrow Upstox read-only backend (scaffold)
+# MGrow Upstox read-only backend
 
-This is an isolated Cloudflare Worker scaffold. It is not deployed and is not yet connected to the Android app.
+This isolated Cloudflare Worker is a development scaffold. It is not deployed and is not connected to the Android app.
 
 ## Endpoints
 - `GET /health`: worker status only; does not contact Upstox.
-- `GET /v1/nifty/quote`: fixed NIFTY 50 index LTP request using Upstox Analytics Token.
+- `GET /v1/nifty/quote`: fixed NIFTY 50 index LTP request using the Upstox Analytics Token.
 
-## Configure secrets (never commit token values)
-Use Cloudflare Workers secrets:
+## Secrets
+Configure secrets only in the Cloudflare Worker environment:
 ```sh
 npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
 npx wrangler secret put MGROW_CLIENT_KEY
 ```
-Use a unique random client key. Never place the Upstox token in Android source, APK, GitHub, screenshots, or chat.
+Never commit token values or put them in Android source, APKs, screenshots, chat, or public GitHub content.
 
-## Deploy only after reviewing Upstox terms and access
-```sh
-npx wrangler deploy
-```
+## Current safeguards
+- Fixed GET routes only; no arbitrary proxy, order, portfolio, or account endpoints.
+- Server-side Upstox token; response caching disabled.
+- Upstream request timeout and strict NIFTY quote payload validation.
+- Generic upstream error responses; authorization headers and tokens are not logged or forwarded.
 
-## Test
-```sh
-curl https://YOUR-WORKER.workers.dev/health
-curl -H "x-mgrow-client-key: YOUR_CLIENT_KEY" https://YOUR-WORKER.workers.dev/v1/nifty/quote
-```
+## Important production blockers
+- The shared client-key header is only a temporary development gate. Any static key embedded in an APK can be extracted; it is NOT production-grade user authentication.
+- Do not deploy publicly until account-owner authentication, abuse/rate limiting, and operational monitoring are implemented and reviewed.
+- The API response's receipt time is not the exchange timestamp. A successful response alone does not prove that the quote is fresh. Add a verified exchange-time freshness check before allowing the app's AI engine to use the quote.
+- Review Upstox API terms and permissions for the intended personal research/data display use before live deployment.
 
-## Security notes
-- This worker is not deployed by this repository workflow.
-- The Upstox credential remains server-side in Cloudflare Secrets.
-- The client key is an additional gate, not a substitute for strong user authentication; any key embedded in a mobile app can potentially be extracted. Before production use, add a stronger access-control/rate-limiting layer and keep the endpoint private to the account owner.
-- Responses are not cached. Only fixed GET routes are accepted; no arbitrary URL proxy, POST, order, portfolio, or account routes are exposed.
-- Never log authorization headers or tokens.
-- This scaffold does not itself validate exchange timestamps or produce trading signals. Android must reject missing/stale/invalid market data before analysis.
+## Deployment status
+Not deployed. No Android integration. No Main Dashboard files changed. No live-data test has been performed.
