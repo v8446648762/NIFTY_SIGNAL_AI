@@ -22,7 +22,10 @@ function json(body: unknown, status = 200): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  fetch: handleRequest,
+};
+
+export async function handleRequest(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method !== "GET") {
@@ -86,8 +89,7 @@ export default {
     } finally {
       clearTimeout(timeout);
     }
-  },
-};
+}
 
 function extractValidQuote(payload: unknown): Record<string, unknown> | null {
   if (!payload || typeof payload !== "object") return null;
