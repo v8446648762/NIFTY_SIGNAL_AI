@@ -3,5 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2026-11-16"
 
 [vars]
-# Secrets are configured separately with: npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
-# and: npx wrangler secret put MGROW_CLIENT_KEY
+# Set GOOGLE_CLIENT_ID and MGROW_ALLOWED_GOOGLE_EMAIL as non-secret Worker variables.
+# Set UPSTOX_ANALYTICS_TOKEN with: npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
+
+[[ratelimits]]
+name = "QUOTE_LIMITER"
+# Replace this placeholder with a unique namespace ID provisioned for this Worker.
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }
