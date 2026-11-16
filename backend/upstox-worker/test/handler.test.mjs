@@ -59,6 +59,10 @@ globalThis.fetch = originalFetch;
 
 test.afterEach(() => { globalThis.fetch = originalFetch; });
 
+function quotePayload(quote = { last_price: 24123.5, instrument_token: "NSE_INDEX|Nifty 50" }, timestamp = new Date().toISOString()) {
+  return { status: "success", data: { "NSE_INDEX:Nifty 50": { ...quote, timestamp } } };
+}
+
 function request(url, token = validToken, headers = {}) {
   return new Request(url, {
     headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers },
@@ -111,23 +115,19 @@ test("returns validated NIFTY quote and sends bearer token only upstream", async
   let upstreamRequest;
   globalThis.fetch = async (url, init) => {
     upstreamRequest = { url: String(url), init };
-    return new Response(JSON.stringify({
-      status: "success",
-      data: { "NSE_INDEX:Nifty 50": { last_price: 24123.5, instrument_token: 123 } }
-    }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify(quotePayload()), { status: 200, headers: { "content-type": "application/json" } });
   };
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.data.last_price, 24123.5);
+  assert.ok(Number.isFinite(Date.parse(body.quoteTimestamp)));
   assert.match(upstreamRequest.init.headers.Authorization, /^Bearer test-token$/);
   assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
 });
 
 test("rejects malformed or non-positive quote payloads", async () => {
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    status: "success", data: { "NSE_INDEX:Nifty 50": { last_price: 0 } }
-  }), { status: 200 });
+  globalThis.fetch = async () => new Response(JSON.stringify(quotePayload({ last_price: 0 })), { status: 200 });
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
   assert.equal(response.status, 502);
 });
@@ -153,10 +153,7 @@ test("times out when Upstox does not respond", async () => {
 });
 
 test("does not expose broker token or Google ID token in a successful response", async () => {
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    status: "success",
-    data: { "NSE_INDEX:Nifty 50": { last_price: 25001.25 } }
-  }), { status: 200 });
+  globalThis.fetch = async () => new Response(JSON.stringify(quotePayload({ last_price: 25001.25 })), { status: 200 });
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
   const bodyText = await response.text();
   assert.equal(bodyText.includes("test-token"), false);
@@ -177,10 +174,7 @@ test("ignores caller-supplied instrument query and requests only fixed NIFTY 50"
   let requestedUrl = "";
   globalThis.fetch = async (url) => {
     requestedUrl = String(url);
-    return new Response(JSON.stringify({
-      status: "success",
-      data: { "NSE_INDEX:Nifty 50": { last_price: 25001.25 } }
-    }), { status: 200 });
+    return new Response(JSON.stringify(quotePayload({ last_price: 25001.25 })), { status: 200 });
   };
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote?instrument_key=UNSAFE%7COTHER"), env);
   assert.equal(response.status, 200);
@@ -220,4 +214,19 @@ test("fails closed when the rate limiter service throws", async () => {
   const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), brokenEnv);
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: "rate_limiter_unavailable" });
+});
+
+
+test("rejects stale quote timestamps", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify(quotePayload({ last_price: 25001.25 }, new Date(Date.now() - 10 * 60_000).toISOString())), { status: 200 });
+  const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), { error: "invalid_upstream_payload" });
+});
+
+test("rejects quote timestamps too far in the future", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify(quotePayload({ last_price: 25001.25 }, new Date(Date.now() + 60_000).toISOString())), { status: 200 });
+  const response = await handleRequest(request("https://worker.test/v1/nifty/quote"), env);
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), { error: "invalid_upstream_payload" });
 });
