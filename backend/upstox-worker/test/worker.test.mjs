@@ -97,14 +97,14 @@ test("Upstox V3 candles are validated and sorted oldest first", () => {
     status: "success",
     data: {
       candles: [
-        ["2026-11-17T09:16:00+05:30", 25010, 25020, 25005, 25015, 1200, 0],
-        ["2026-11-17T09:15:00+05:30", 25000, 25015, 24995, 25010, 900, 0],
+        ["2025-11-17T09:16:00+05:30", 25010, 25020, 25005, 25015, 1200, 0],
+        ["2025-11-17T09:15:00+05:30", 25000, 25015, 24995, 25010, 900, 0],
       ],
     },
   };
   const result = extractValidCandles(payload);
   assert.equal(result?.length, 2);
-  assert.equal(result?.[0].timestamp, "2026-11-17T09:15:00+05:30");
+  assert.equal(result?.[0].timestamp, "2025-11-17T09:15:00+05:30");
   assert.equal(result?.[1].close, 25015);
 });
 
@@ -112,7 +112,7 @@ test("Upstox V3 candle validation rejects impossible OHLC values", () => {
   const payload = {
     status: "success",
     data: {
-      candles: [["2026-11-17T09:15:00+05:30", 25000, 24900, 25010, 25005, 900, 0]],
+      candles: [["2025-11-17T09:15:00+05:30", 25000, 24900, 25010, 25005, 900, 0]],
     },
   };
   assert.equal(extractValidCandles(payload), null);
