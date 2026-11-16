@@ -12,8 +12,9 @@ type GoogleClaims = {
   email_verified?: boolean;
 };
 
-type JwkSet = { keys?: JsonWebKey[] };
-let cachedKeys: JsonWebKey[] | null = null;
+type GoogleJwk = JsonWebKey & { kid?: string };
+type JwkSet = { keys?: GoogleJwk[] };
+let cachedKeys: GoogleJwk[] | null = null;
 let cacheExpiresAt = 0;
 
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
@@ -29,7 +30,7 @@ function parseJsonSegment<T>(segment: string): T {
   return JSON.parse(new TextDecoder().decode(decodeSegment(segment))) as T;
 }
 
-async function getGoogleKeys(): Promise<JsonWebKey[]> {
+async function getGoogleKeys(): Promise<GoogleJwk[]> {
   if (cachedKeys && Date.now() < cacheExpiresAt) return cachedKeys;
 
   const response = await fetch(GOOGLE_JWKS_URL, {
@@ -94,11 +95,13 @@ export async function verifyGoogleIdToken(
     );
     const signedData = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
     const signature = decodeSegment(parts[2]);
+    const signatureBuffer = signature.buffer.slice(signature.byteOffset, signature.byteOffset + signature.byteLength) as ArrayBuffer;
+    const signedBuffer = signedData.buffer.slice(signedData.byteOffset, signedData.byteOffset + signedData.byteLength) as ArrayBuffer;
     const signatureValid = await crypto.subtle.verify(
       "RSASSA-PKCS1-v1_5",
       publicKey,
-      signature,
-      signedData,
+      signatureBuffer,
+      signedBuffer,
     );
     return signatureValid ? { email: claims.email } : null;
   } catch {
