@@ -7,6 +7,13 @@ const UPSTOX_BASE = "https://api.upstox.com/v3";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
+
+class UpstreamHttpError extends Error {
+  constructor(readonly status: number) {
+    super("Upstream HTTP request failed");
+    this.name = "UpstreamHttpError";
+  }
+}
 const MAX_FUTURE_SKEW_MS = 5_000;
 
 function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
@@ -63,7 +70,11 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (error instanceof Error && error.name === "AbortError") {
         return json({ error: "upstream_timeout" }, 504);
       }
-      return json({ error: "upstream_candle_request_failed" }, 502);
+      if (error instanceof UpstreamHttpError) {
+        // Expose only the upstream HTTP status, never broker response bodies or tokens.
+        return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status }, 502);
+      }
+      return json({ error: "upstream_candle_request_failed", upstreamStatus: null }, 502);
     }
   }
 
@@ -121,7 +132,7 @@ async function fetchIntradayCandles(
         signal: controller.signal,
       },
     );
-    if (!upstream.ok) throw new Error(`Upstox candle API returned ${upstream.status}`);
+    if (!upstream.ok) throw new UpstreamHttpError(upstream.status);
     const payload: unknown = await upstream.json();
     return extractValidCandles(payload);
   } finally {
