@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2026-11-16"
 
 [vars]
-# Set Cloudflare Worker secrets: UPSTOX_ANALYTICS_TOKEN, MGROW_APP_PIN (8+ chars), MGROW_SESSION_SECRET (32+ random chars).
+# Set UPSTOX_ANALYTICS_TOKEN as a Worker secret. Read-only NIFTY endpoints are public and protected by per-IP rate limiting.
 
 [[ratelimits]]
 name = "QUOTE_LIMITER"
