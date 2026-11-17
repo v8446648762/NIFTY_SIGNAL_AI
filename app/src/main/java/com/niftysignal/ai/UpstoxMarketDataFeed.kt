@@ -30,19 +30,31 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
         scope = feedScope
         pollJob = feedScope.launch {
             listener.onStatusChanged(FeedConnectionState.CONNECTING, "Connecting securely to MGrow live data...")
+            var lastCandleFetchAt = 0L
+            var oneMinute = emptyList<MarketCandle>()
+            var fiveMinute = emptyList<MarketCandle>()
             while (isActive) {
                 try {
+                    // Quotes refresh frequently; candles refresh once per minute because
+                    // 1m/5m candle endpoints do not need to be polled every 15 seconds.
                     val quoteResponse = getJson("/v1/nifty/quote")
-                    val candleResponse = getJson("/v1/nifty/candles")
+                    val now = System.currentTimeMillis()
+                    if (oneMinute.isEmpty() || fiveMinute.isEmpty() ||
+                        now - lastCandleFetchAt >= CANDLE_REFRESH_INTERVAL_MS) {
+                        val candleResponse = getJson("/v1/nifty/candles")
+                        val candleData = candleResponse.optJSONObject("data")
+                            ?: throw IllegalStateException("NIFTY candles are missing")
+                        val newOneMinute = parseCandles(candleData, "oneMinuteCandles")
+                        val newFiveMinute = parseCandles(candleData, "fiveMinuteCandles")
+                        if (newOneMinute.isEmpty() || newFiveMinute.isEmpty()) {
+                            throw IllegalStateException("Upstox returned no intraday candles")
+                        }
+                        oneMinute = newOneMinute
+                        fiveMinute = newFiveMinute
+                        lastCandleFetchAt = now
+                    }
                     val quote = quoteResponse.optJSONObject("data")
                         ?: throw IllegalStateException("NIFTY quote is missing")
-                    val candleData = candleResponse.optJSONObject("data")
-                        ?: throw IllegalStateException("NIFTY candles are missing")
-                    val oneMinute = parseCandles(candleData, "oneMinuteCandles")
-                    val fiveMinute = parseCandles(candleData, "fiveMinuteCandles")
-                    if (oneMinute.isEmpty() || fiveMinute.isEmpty()) {
-                        throw IllegalStateException("Upstox returned no intraday candles")
-                    }
                     val ohlc = quote.optJSONObject("ohlc")
                     val lastPrice = quote.optDouble("last_price", Double.NaN)
                     if (!lastPrice.isFinite() || lastPrice <= 0.0) {
@@ -82,10 +94,15 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                     }
                     listener.onStatusChanged(FeedConnectionState.ERROR, reason)
                 }
-                delay(POLL_INTERVAL_MS)
+                // A 429 is a rate-limit response: wait longer before retrying.
+                val waitMs = if (lastStatusWasRateLimited) RATE_LIMIT_BACKOFF_MS else POLL_INTERVAL_MS
+                lastStatusWasRateLimited = false
+                delay(waitMs)
             }
         }
     }
+
+    @Volatile private var lastStatusWasRateLimited = false
 
     override fun disconnect() {
         stopPolling()
@@ -96,6 +113,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
         pollJob = null
         scope?.cancel()
         scope = null
+        lastStatusWasRateLimited = false
     }
 
     private fun getJson(path: String): JSONObject {
@@ -115,6 +133,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                 val errorCode = errorBody?.optString("error", "http_error") ?: "http_error"
                 val upstreamStatus = errorBody?.optInt("upstreamStatus")?.takeIf { it > 0 }
                 val interval = errorBody?.optString("interval")?.takeIf { it == "1" || it == "5" }
+                if (upstreamStatus == 429 || status == 429) lastStatusWasRateLimited = true
                 throw MarketDataHttpException(status, errorCode, upstreamStatus, interval)
             }
             return JSONObject(body)
@@ -153,6 +172,8 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
 
     private companion object {
         const val POLL_INTERVAL_MS = 15_000L
+        const val CANDLE_REFRESH_INTERVAL_MS = 60_000L
+        const val RATE_LIMIT_BACKOFF_MS = 60_000L
         const val REQUEST_TIMEOUT_MS = 5_000
     }
 }
