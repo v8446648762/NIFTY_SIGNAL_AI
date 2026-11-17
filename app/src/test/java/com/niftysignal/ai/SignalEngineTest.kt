@@ -60,6 +60,19 @@ class SignalEngineTest {
     }
 
     @Test
+    fun zeroIndexVolumeKeepsEmaRsiAvailableButDoesNotInventVwap() {
+        val primary = risingCandles(30).map { it.copy(volume = 0.0) }
+        val confirmation = risingCandles(3).map { it.copy(volume = 0.0) }
+        val result = SignalEngine.evaluate(primary, confirmation)
+        assertEquals(TradeBias.BUY_CE, result.bias)
+        assertTrue(result.trend.startsWith("BULLISH"))
+        assertTrue(result.indicators.ema9!! > 0.0)
+        assertTrue(result.indicators.ema21!! > 0.0)
+        assertTrue(result.indicators.rsi14!! > 0.0)
+        assertNull(result.indicators.vwap)
+    }
+
+    @Test
     fun invalidOhlcvNeverProducesTradeSignal() {
         val invalid = risingCandles(30).toMutableList()
         invalid[10] = invalid[10].copy(volume = -1.0)
