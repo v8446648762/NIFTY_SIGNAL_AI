@@ -79,21 +79,27 @@ class UpstoxWorkerMarketDataFeed : MarketDataFeed {
             val oneMinute = parseCandles(data.optJSONArray("oneMinuteCandles"), 60_000L, now)
             val fiveMinute = parseCandles(data.optJSONArray("fiveMinuteCandles"), 300_000L, now)
             if (oneMinute.isEmpty() || fiveMinute.isEmpty()) {
-                throw IllegalStateException("No completed 1-minute or 5-minute candles were returned")
+                throw IllegalStateException("Worker returned no completed 1-minute or 5-minute candles")
             }
             val latestOneMinuteEnd = oneMinute.last().timestampMillis + 60_000L
             val latestFiveMinuteEnd = fiveMinute.last().timestampMillis + 300_000L
-            if (now - latestOneMinuteEnd > 180_000L || now - latestFiveMinuteEnd > 600_000L) {
-                throw IllegalStateException("Latest completed NIFTY candles are stale; waiting for a fresh market update")
-            }
+            val stale = now - latestOneMinuteEnd > 180_000L || now - latestFiveMinuteEnd > 600_000L
+            val staleMessage = if (stale) {
+                "Showing last completed NIFTY candles. Market may be closed or feed delayed; live signals are paused."
+            } else null
             target.onSnapshot(
                 MarketDataSnapshot(
                     fiveMinuteCandles = fiveMinute,
                     oneMinuteCandles = oneMinute,
-                    receivedAtMillis = now
+                    receivedAtMillis = now,
+                    isStale = stale,
+                    staleReason = staleMessage
                 )
             )
-            target.onStatusChanged(FeedConnectionState.LIVE, null)
+            target.onStatusChanged(
+                if (stale) FeedConnectionState.STALE else FeedConnectionState.LIVE,
+                staleMessage
+            )
         } catch (error: Exception) {
             val message = when (error) {
                 is java.net.SocketTimeoutException -> "Market data request timed out"
