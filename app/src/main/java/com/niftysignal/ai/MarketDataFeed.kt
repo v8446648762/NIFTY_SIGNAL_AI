@@ -24,6 +24,8 @@ data class MarketDataSnapshot(
     val fiveMinuteCandles: List<MarketCandle>,
     val oneMinuteCandles: List<MarketCandle>,
     val receivedAtMillis: Long,
+    val isStale: Boolean = false,
+    val staleReason: String? = null,
     val previousClose: Double? = null,
     val dayHigh: Double? = null,
     val dayLow: Double? = null
