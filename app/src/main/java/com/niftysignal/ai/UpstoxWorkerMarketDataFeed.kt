@@ -81,6 +81,11 @@ class UpstoxWorkerMarketDataFeed : MarketDataFeed {
             if (oneMinute.isEmpty() || fiveMinute.isEmpty()) {
                 throw IllegalStateException("No completed 1-minute or 5-minute candles were returned")
             }
+            val latestOneMinuteEnd = oneMinute.last().timestampMillis + 60_000L
+            val latestFiveMinuteEnd = fiveMinute.last().timestampMillis + 300_000L
+            if (now - latestOneMinuteEnd > 180_000L || now - latestFiveMinuteEnd > 600_000L) {
+                throw IllegalStateException("Latest completed NIFTY candles are stale; waiting for a fresh market update")
+            }
             target.onSnapshot(
                 MarketDataSnapshot(
                     fiveMinuteCandles = fiveMinute,
