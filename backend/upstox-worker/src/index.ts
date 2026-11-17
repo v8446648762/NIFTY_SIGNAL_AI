@@ -1,9 +1,6 @@
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
-  MGROW_APP_PIN: string;
-  MGROW_SESSION_SECRET: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
-  LOGIN_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
 const UPSTOX_BASE = "https://api.upstox.com/v3";
@@ -35,37 +32,15 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     return json({ service: "mgrow-upstox-proxy", status: "ready", brokerConnected: false });
   }
 
-  if (url.pathname === "/v1/auth/login") {
-    if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-    if (!env.MGROW_APP_PIN || !env.MGROW_SESSION_SECRET || env.MGROW_APP_PIN.length < 8 || env.MGROW_SESSION_SECRET.length < 32) {
-      return json({ error: "auth_secrets_not_configured" }, 503);
-    }
-    if (!env.LOGIN_LIMITER || typeof env.LOGIN_LIMITER.limit !== "function") return json({ error: "login_limiter_not_configured" }, 503);
-    try {
-      const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
-      const limited = await env.LOGIN_LIMITER.limit({ key: `pin-login:${ip}` });
-      if (!limited.success) return json({ error: "login_rate_limit_exceeded" }, 429, { "retry-after": "60" });
-    } catch { return json({ error: "login_limiter_unavailable" }, 503); }
-    let body: unknown;
-    try { body = await request.json(); } catch { return json({ error: "invalid_json" }, 400); }
-    const pin = body && typeof body === "object" ? (body as Record<string, unknown>).pin : null;
-    if (typeof pin !== "string" || pin.length < 8 || pin.length > 32 || !constantTimeEqual(pin, env.MGROW_APP_PIN)) {
-      return json({ error: "invalid_credentials" }, 401);
-    }
-    return json({ token: await createSessionToken(env.MGROW_SESSION_SECRET), expiresIn: 43200 });
-  }
-
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles") return json({ error: "not_found" }, 404);
-  if (!env.UPSTOX_ANALYTICS_TOKEN || !env.MGROW_SESSION_SECRET || env.MGROW_SESSION_SECRET.length < 32) {
-    return json({ error: "server_secrets_not_configured" }, 503);
+  if (!env.UPSTOX_ANALYTICS_TOKEN) {
+    return json({ error: "upstox_token_not_configured" }, 503);
   }
-  const authorization = request.headers.get("authorization") ?? "";
-  const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (!bearer || bearer.trim() !== bearer || !(await verifySessionToken(bearer, env.MGROW_SESSION_SECRET))) return json({ error: "unauthorized" }, 401);
   if (!env.QUOTE_LIMITER || typeof env.QUOTE_LIMITER.limit !== "function") return json({ error: "rate_limiter_not_configured" }, 503);
   try {
-    const rateLimit = await env.QUOTE_LIMITER.limit({ key: "mgrow-owner" });
+    const clientIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const rateLimit = await env.QUOTE_LIMITER.limit({ key: `nifty-readonly:${clientIp}` });
     if (!rateLimit.success) return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
 
@@ -199,37 +174,3 @@ function extractValidQuote(payload: unknown): Record<string, unknown> | null {
   return record;
 }
 
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const aa = new TextEncoder().encode(a), bb = new TextEncoder().encode(b);
-  let diff = aa.length ^ bb.length;
-  for (let i = 0; i < Math.max(aa.length, bb.length); i++) diff |= (aa[i] ?? 0) ^ (bb[i] ?? 0);
-  return diff === 0;
-}
-
-async function signSession(payload: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
-}
-
-async function createSessionToken(secret: string): Promise<string> {
-  const payload = base64Url(new TextEncoder().encode(JSON.stringify({ sub: "mgrow-owner", exp: Math.floor(Date.now() / 1000) + 43200 })));
-  return payload + "." + await signSession(payload, secret);
-}
-
-async function verifySessionToken(token: string, secret: string): Promise<boolean> {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 2 || !constantTimeEqual(parts[1], await signSession(parts[0], secret))) return false;
-    const normalized = parts[0].replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
-    const claims = JSON.parse(decoded) as { sub?: string; exp?: number };
-    return claims.sub === "mgrow-owner" && typeof claims.exp === "number" && claims.exp > Math.floor(Date.now() / 1000);
-  } catch { return false; }
-}
