@@ -345,9 +345,9 @@ class MainActivity : FragmentActivity() {
             return
         }
         if (snapshot.fiveMinuteCandles.isEmpty() ||
-            snapshot.oneMinuteCandles.isEmpty() ||
             !snapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
-            !snapshot.oneMinuteCandles.all(::isValidMarketCandle)
+            (snapshot.oneMinuteCandles.isNotEmpty() &&
+                !snapshot.oneMinuteCandles.all(::isValidMarketCandle))
         ) {
             updateFeedStatus(FeedConnectionState.ERROR, "Feed returned empty or invalid OHLCV candles.")
             return
@@ -439,12 +439,15 @@ class MainActivity : FragmentActivity() {
         }
         signalReasonView.text = decision.reasons.joinToString("\n") + "\n" + marathiReason
 
-        vwapValueView.text = formatMarketValue(decision.indicators.vwap)
-        ema9ValueView.text = formatMarketValue(decision.indicators.ema9)
-        ema21ValueView.text = formatMarketValue(decision.indicators.ema21)
-        rsiValueView.text = formatMarketValue(decision.indicators.rsi14)
-        supportValueView.text = formatMarketValue(decision.indicators.support)
-        resistanceValueView.text = formatMarketValue(decision.indicators.resistance)
+        // Calculate technical indicators from validated 5m candles independently
+        // of optional 1m confirmation data. AI setup remains WAIT until 1m confirms.
+        val indicatorValues = SignalEngine.calculate(snapshot.fiveMinuteCandles)
+        vwapValueView.text = formatMarketValue(indicatorValues.vwap)
+        ema9ValueView.text = formatMarketValue(indicatorValues.ema9)
+        ema21ValueView.text = formatMarketValue(indicatorValues.ema21)
+        rsiValueView.text = formatMarketValue(indicatorValues.rsi14)
+        supportValueView.text = formatMarketValue(indicatorValues.support)
+        resistanceValueView.text = formatMarketValue(indicatorValues.resistance)
 
         val visibleCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
         chart.setCandles(visibleCandles)
