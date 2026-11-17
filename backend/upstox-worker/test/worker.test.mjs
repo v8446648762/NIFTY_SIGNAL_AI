@@ -72,3 +72,27 @@ test("Upstox V3 candle validation rejects impossible OHLC values", () => {
   ] } };
   assert.equal(extractValidCandles(payload), null);
 });
+
+
+test("5m candles remain available when the optional 1m request is rate limited", async () => {
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/minutes/1")) {
+      return new Response(JSON.stringify({ status: "error" }), { status: 429 });
+    }
+    return new Response(JSON.stringify({ status: "success", data: { candles: [
+      ["2026-11-17T09:15:00+05:30", 25000, 25020, 24990, 25010, 900, 0],
+    ] } }), { status: 200 });
+  };
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/candles", {
+    headers: { "CF-Connecting-IP": "192.0.2.44" },
+  }), configuredEnv);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.data.fiveMinuteCandles.length, 1);
+  assert.deepEqual(body.data.oneMinuteCandles, []);
+  assert.deepEqual(body.warnings, ["one_minute_temporarily_unavailable"]);
+  assert.match(calls[0], /minutes\/5$/);
+  assert.match(calls[1], /minutes\/1$/);
+});
