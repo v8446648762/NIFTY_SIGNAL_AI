@@ -1513,7 +1513,7 @@ class MainActivity : FragmentActivity() {
         box.addView(testButton, LinearLayout.LayoutParams(-1, dp(46)))
         addGap(box, 6)
         box.addView(text(
-            "Alert preferences are saved on this phone. Market-triggered alerts will activate after FYERS live data and signal conditions are connected. No orders are placed.",
+            "Alert preferences are saved on this phone. Market-triggered alerts will activate after Upstox live data and signal conditions are connected. No orders are placed.",
             10f, amber
         ))
         return box
