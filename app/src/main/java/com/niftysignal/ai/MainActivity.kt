@@ -1366,7 +1366,7 @@ class MainActivity : FragmentActivity() {
         titleCol.addView(text("AI NIFTY OPTIONS TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         wrap.addView(buildDateTimeView())
-        wrap.addView(pill("●  DEMO MODE", amber))
+        wrap.addView(pill("●  READ-ONLY MODE", cyan))
         return wrap
     }
 
