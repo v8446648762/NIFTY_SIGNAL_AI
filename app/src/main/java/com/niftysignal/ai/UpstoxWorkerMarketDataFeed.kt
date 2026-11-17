@@ -46,6 +46,20 @@ class UpstoxWorkerMarketDataFeed : MarketDataFeed {
         )
     }
 
+    /** Manually request an immediate read-only connection refresh from Settings. */
+    fun refreshNow(onComplete: (() -> Unit)? = null) {
+        val service = executor
+        if (service == null || service.isShutdown) {
+            val currentListener = listener
+            if (currentListener != null) connect(currentListener)
+            onComplete?.invoke()
+        } else {
+            service.execute {
+                try { pollOnce() } finally { onComplete?.invoke() }
+            }
+        }
+    }
+
     override fun disconnect() {
         executor?.shutdownNow()
         executor = null
