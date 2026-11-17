@@ -77,6 +77,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, sessionToken: String) : Market
                     throw error
                 } catch (error: Exception) {
                     val reason = when (error) {
+                        is MarketDataHttpException -> "Worker HTTP ${error.statusCode}: ${error.errorCode}"
                         is java.net.SocketTimeoutException -> "Live data server timed out."
                         is java.io.IOException -> "Network connection failed."
                         else -> "Live data unavailable (${error.javaClass.simpleName})."
@@ -112,8 +113,13 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, sessionToken: String) : Market
         }
         try {
             val status = connection.responseCode
-            if (status !in 200..299) throw java.io.IOException("MGrow Worker returned HTTP $status")
-            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (status !in 200..299) {
+                val errorCode = runCatching { JSONObject(body).optString("error", "http_error") }
+                    .getOrDefault("http_error")
+                throw MarketDataHttpException(status, errorCode)
+            }
             return JSONObject(body)
         } finally {
             connection.disconnect()
@@ -154,6 +160,12 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, sessionToken: String) : Market
     }
 }
 
+
+/** Safe, structured HTTP error returned by the MGrow Worker. */
+private class MarketDataHttpException(
+    val statusCode: Int,
+    val errorCode: String
+) : java.io.IOException("MGrow Worker HTTP $statusCode: $errorCode")
 
 /** Exchanges a user-entered PIN for a short-lived server-signed MGrow session. */
 object MgrowPinAuth {
