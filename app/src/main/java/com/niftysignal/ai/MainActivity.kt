@@ -337,9 +337,31 @@ class MainActivity : FragmentActivity() {
 
         // Keep the feed connected when a snapshot arrives on Settings or another
         // page; Home-only dashboard views are initialized lazily by showPage("Home").
-        if (!::indexPriceView.isInitialized || !::chart.isInitialized ||
-            !::signalBiasView.isInitialized || !::chartModePill.isInitialized
+        // Settings can connect the feed before the Home dashboard is built.
+        // Do not touch ANY lazily-created dashboard view until every required
+        // lateinit view has been initialized by showPage("Home").
+        if (!::indexPriceView.isInitialized ||
+            !::indexHintView.isInitialized ||
+            !::changeValueView.isInitialized ||
+            !::dayHighValueView.isInitialized ||
+            !::dayLowValueView.isInitialized ||
+            !::signalBiasView.isInitialized ||
+            !::signalStatusView.isInitialized ||
+            !::signalTrendValueView.isInitialized ||
+            !::signalSetupValueView.isInitialized ||
+            !::signalConfirmValueView.isInitialized ||
+            !::signalReasonView.isInitialized ||
+            !::vwapValueView.isInitialized ||
+            !::ema9ValueView.isInitialized ||
+            !::ema21ValueView.isInitialized ||
+            !::rsiValueView.isInitialized ||
+            !::supportValueView.isInitialized ||
+            !::resistanceValueView.isInitialized ||
+            !::chart.isInitialized ||
+            !::chartModePill.isInitialized ||
+            !::chartModeNoteView.isInitialized
         ) {
+            android.util.Log.d("MGrowMarketFeed", "Live snapshot cached; Home dashboard views are not initialized yet")
             return
         }
 
