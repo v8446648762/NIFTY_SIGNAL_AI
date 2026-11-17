@@ -183,11 +183,32 @@ class MainActivity : FragmentActivity() {
 
     private val marketFeedListener = object : MarketDataFeed.Listener {
         override fun onStatusChanged(status: FeedConnectionState, message: String?) {
-            runOnUiThread { updateFeedStatus(status, message) }
+            runOnUiThread {
+                try {
+                    updateFeedStatus(status, message)
+                } catch (error: Throwable) {
+                    android.util.Log.e("MGrowMarketFeed", "Failed to update feed status", error)
+                    runCatching {
+                        Toast.makeText(this@MainActivity, "MGrow feed status error: ${error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
         }
 
         override fun onSnapshot(snapshot: MarketDataSnapshot) {
-            runOnUiThread { applyMarketSnapshot(snapshot) }
+            runOnUiThread {
+                try {
+                    applyMarketSnapshot(snapshot)
+                } catch (error: Throwable) {
+                    android.util.Log.e("MGrowMarketFeed", "Failed to apply live market snapshot", error)
+                    runCatching {
+                        updateFeedStatus(FeedConnectionState.ERROR, "Live data received, but dashboard update failed: ${error.javaClass.simpleName}")
+                    }
+                    runCatching {
+                        Toast.makeText(this@MainActivity, "MGrow dashboard error: ${error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
         }
     }
 
@@ -201,7 +222,13 @@ class MainActivity : FragmentActivity() {
         marketDataFeed?.disconnect()
         marketDataFeed = feed
         updateFeedStatus(FeedConnectionState.CONNECTING, "Connecting to market data")
-        feed.connect(marketFeedListener)
+        try {
+            feed.connect(marketFeedListener)
+        } catch (error: Throwable) {
+            android.util.Log.e("MGrowMarketFeed", "Failed to start market data feed", error)
+            marketDataFeed = null
+            updateFeedStatus(FeedConnectionState.ERROR, "Could not start live data: ${error.javaClass.simpleName}")
+        }
     }
 
     fun detachMarketDataFeed() {
@@ -1109,8 +1136,12 @@ class MainActivity : FragmentActivity() {
             statusView.text = "Connecting to NIFTY read-only live data..."
             connectButton.text = "CONNECTING..."
             clearButton.isEnabled = true
-        } catch (error: Exception) {
-            statusView.text = "Live data connection failed: ${error.message ?: error.javaClass.simpleName}"
+        } catch (error: Throwable) {
+            android.util.Log.e("MGrowMarketFeed", "Connect button failed", error)
+            statusView.text = "Live data connection failed: ${error.javaClass.simpleName}"
+            runCatching {
+                Toast.makeText(this, "Live data error: ${error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+            }
         } finally {
             connectButton.isEnabled = true
         }
