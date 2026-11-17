@@ -65,7 +65,7 @@ class UpstoxWorkerMarketDataFeed : MarketDataFeed {
             }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
                 throw IllegalStateException("Market data server returned HTTP $code")
             }
