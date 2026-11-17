@@ -214,8 +214,13 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun updateFeedStatus(status: FeedConnectionState, message: String? = null) {
+        val color = when (status) {
+            FeedConnectionState.LIVE -> green
+            FeedConnectionState.CONNECTING -> cyan
+            FeedConnectionState.STALE, FeedConnectionState.ERROR -> red
+            FeedConnectionState.OFFLINE -> amber
+        }
         if (::feedStatusView.isInitialized) {
-            val color = when (status) {
                 FeedConnectionState.LIVE -> green
                 FeedConnectionState.CONNECTING -> cyan
                 FeedConnectionState.STALE, FeedConnectionState.ERROR -> red
