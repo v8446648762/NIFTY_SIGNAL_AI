@@ -335,6 +335,14 @@ class MainActivity : FragmentActivity() {
         latestSnapshot = snapshot
         updateFeedStatus(FeedConnectionState.LIVE, null)
 
+        // Keep the feed connected when a snapshot arrives on Settings or another
+        // page; Home-only dashboard views are initialized lazily by showPage("Home").
+        if (!::indexPriceView.isInitialized || !::chart.isInitialized ||
+            !::signalBiasView.isInitialized || !::chartModePill.isInitialized
+        ) {
+            return
+        }
+
         val latest = snapshot.fiveMinuteCandles.last()
         val currentPrice = snapshot.lastPrice?.takeIf { it.isFinite() && it > 0.0 } ?: latest.close
         indexPriceView.text = formatMarketValue(currentPrice)
@@ -576,6 +584,14 @@ class MainActivity : FragmentActivity() {
         when (page) {
             "Home" -> {
                 pageContent.addView(buildHomeDashboard())
+                // A live snapshot may arrive while the user is on Settings.
+                // Re-render it only after all Home dashboard views are initialized.
+                latestSnapshot?.let { snapshot ->
+                    runCatching { applyMarketSnapshot(snapshot) }
+                        .onFailure { error ->
+                            android.util.Log.e("MGrowMarketFeed", "Failed to render cached snapshot on Home", error)
+                        }
+                }
             }
             "Chart" -> {
                 pageContent.addView(buildHeader())
