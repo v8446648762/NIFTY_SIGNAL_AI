@@ -7,6 +7,10 @@ const UPSTOX_BASE = "https://api.upstox.com/v3";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
+const CANDLE_CACHE_TTL_MS = 55_000;
+const CANDLE_STALE_FALLBACK_MS = 5 * 60_000;
+let candleCache: { body: Record<string, unknown>; cachedAt: number } | null = null;
+let candleFetchInFlight: Promise<Record<string, unknown>> | null = null;
 
 class UpstreamHttpError extends Error {
   constructor(readonly status: number, readonly interval: "1" | "5") {
@@ -52,29 +56,45 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
 
   if (url.pathname === "/v1/nifty/candles") {
+    const now = Date.now();
+    if (candleCache && now - candleCache.cachedAt <= CANDLE_CACHE_TTL_MS) {
+      return json({ ...candleCache.body, cache: "hit" });
+    }
     try {
-      const [oneMinute, fiveMinute] = await Promise.all([
-        fetchIntradayCandles("1", env.UPSTOX_ANALYTICS_TOKEN),
-        fetchIntradayCandles("5", env.UPSTOX_ANALYTICS_TOKEN),
-      ]);
-      if (!oneMinute || !fiveMinute) {
-        return json({ error: "invalid_upstream_candle_payload" }, 502);
+      if (!candleFetchInFlight) {
+        candleFetchInFlight = (async () => {
+          // Keep the two broker calls sequential to reduce burst pressure on Upstox.
+          const oneMinute = await fetchIntradayCandles("1", env.UPSTOX_ANALYTICS_TOKEN);
+          const fiveMinute = await fetchIntradayCandles("5", env.UPSTOX_ANALYTICS_TOKEN);
+          if (!oneMinute || !fiveMinute) throw new Error("invalid_upstream_candle_payload");
+          return {
+            provider: "upstox",
+            instrumentKey: NIFTY_50_KEY,
+            receivedAt: new Date().toISOString(),
+            data: { oneMinuteCandles: oneMinute, fiveMinuteCandles: fiveMinute },
+          };
+        })();
       }
-      return json({
-        provider: "upstox",
-        instrumentKey: NIFTY_50_KEY,
-        receivedAt: new Date().toISOString(),
-        data: { oneMinuteCandles: oneMinute, fiveMinuteCandles: fiveMinute },
-      });
+      const body = await candleFetchInFlight;
+      candleCache = { body, cachedAt: Date.now() };
+      return json({ ...body, cache: "refreshed" });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return json({ error: "upstream_timeout" }, 504);
       }
       if (error instanceof UpstreamHttpError) {
-        // Expose only the upstream HTTP status, never broker response bodies or tokens.
+        // If Upstox throttles a refresh, serve only a short-lived previously validated snapshot.
+        if (error.status === 429 && candleCache && Date.now() - candleCache.cachedAt <= CANDLE_STALE_FALLBACK_MS) {
+          return json({ ...candleCache.body, cache: "stale_fallback" });
+        }
         return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status, interval: error.interval }, 502);
       }
+      if (error instanceof Error && error.message === "invalid_upstream_candle_payload") {
+        return json({ error: "invalid_upstream_candle_payload" }, 502);
+      }
       return json({ error: "upstream_candle_request_failed", upstreamStatus: null }, 502);
+    } finally {
+      candleFetchInFlight = null;
     }
   }
 
