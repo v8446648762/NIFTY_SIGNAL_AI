@@ -10,6 +10,8 @@ const MAX_QUOTE_AGE_MS = 60_000;
 const CANDLE_CACHE_TTL_MS = 55_000;
 let candleCache: { body: Record<string, unknown>; cachedAt: number } | null = null;
 let candleFetchInFlight: Promise<Record<string, unknown>> | null = null;
+let oneMinuteRetryAfter = 0;
+const ONE_MINUTE_RETRY_COOLDOWN_MS = 5 * 60_000;
 
 class UpstreamHttpError extends Error {
   constructor(readonly status: number, readonly interval: "1" | "5") {
@@ -62,15 +64,30 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     try {
       if (!candleFetchInFlight) {
         candleFetchInFlight = (async () => {
-          // Keep the two broker calls sequential to reduce burst pressure on Upstox.
-          const oneMinute = await fetchIntradayCandles("1", env.UPSTOX_ANALYTICS_TOKEN);
+          // 5m is the primary chart feed. A 1m rate-limit must never block it.
           const fiveMinute = await fetchIntradayCandles("5", env.UPSTOX_ANALYTICS_TOKEN);
-          if (!oneMinute || !fiveMinute) throw new Error("invalid_upstream_candle_payload");
+          if (!fiveMinute) throw new Error("invalid_upstream_candle_payload");
+          let oneMinute: Awaited<ReturnType<typeof fetchIntradayCandles>> = null;
+          let oneMinuteUnavailable = false;
+          if (Date.now() >= oneMinuteRetryAfter) {
+            try {
+              oneMinute = await fetchIntradayCandles("1", env.UPSTOX_ANALYTICS_TOKEN);
+              if (!oneMinute) oneMinuteUnavailable = true;
+              oneMinuteRetryAfter = oneMinuteUnavailable ? Date.now() + ONE_MINUTE_RETRY_COOLDOWN_MS : 0;
+            } catch (error) {
+              oneMinuteUnavailable = true;
+              oneMinuteRetryAfter = Date.now() + ONE_MINUTE_RETRY_COOLDOWN_MS;
+              // A 1m failure is non-fatal; keep the verified 5m feed available.
+            }
+          } else {
+            oneMinuteUnavailable = true;
+          }
           return {
             provider: "upstox",
             instrumentKey: NIFTY_50_KEY,
             receivedAt: new Date().toISOString(),
-            data: { oneMinuteCandles: oneMinute, fiveMinuteCandles: fiveMinute },
+            data: { oneMinuteCandles: oneMinute ?? [], fiveMinuteCandles: fiveMinute },
+            ...(oneMinuteUnavailable ? { warnings: ["one_minute_temporarily_unavailable"] } : {}),
           };
         })();
       }
