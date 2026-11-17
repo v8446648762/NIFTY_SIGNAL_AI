@@ -177,6 +177,7 @@ class MainActivity : FragmentActivity() {
     private lateinit var chartModePill: TextView
     private lateinit var chartModeNoteView: TextView
     private lateinit var headerModePill: TextView
+    private lateinit var workerConnectionDetailView: TextView
 
     private val marketFeedListener = object : MarketDataFeed.Listener {
         override fun onStatusChanged(status: FeedConnectionState, message: String?) {
@@ -224,6 +225,16 @@ class MainActivity : FragmentActivity() {
             feedStatusView.text = "● FEED " + status.name
             feedStatusView.setTextColor(color)
             feedStatusView.background = rounded(Color.argb(190, 41, 38, 66), color, 30)
+        }
+        if (::workerConnectionDetailView.isInitialized) {
+            workerConnectionDetailView.text = when (status) {
+                FeedConnectionState.LIVE -> "Upstox Worker • HTTPS • Live candles received"
+                FeedConnectionState.STALE -> "Upstox Worker • Connected, but latest candles are stale"
+                FeedConnectionState.CONNECTING -> "Upstox Worker • Checking secure connection…"
+                FeedConnectionState.ERROR -> "Upstox Worker • " + (message ?: "Connection error")
+                FeedConnectionState.OFFLINE -> "Upstox Worker • Offline"
+            }
+            workerConnectionDetailView.setTextColor(color)
         }
         if (::headerModePill.isInitialized) {
             headerModePill.text = when (status) {
@@ -1196,6 +1207,33 @@ class MainActivity : FragmentActivity() {
                 }.setNegativeButton("Cancel", null).show()
         })
         addGap(root, 9)
+        addGap(root, 12)
+        section(root, if (isMarathi()) "मार्केट डेटा कनेक्शन" else "MARKET DATA CONNECTION")
+        val connectionCard = card()
+        connectionCard.addView(text("UPSTOX • CLOUDFLARE WORKER", 11f, cyan, true))
+        addGap(connectionCard, 6)
+        workerConnectionDetailView = text("Upstox Worker • Checking connection…", 11f, muted)
+        connectionCard.addView(workerConnectionDetailView)
+        addGap(connectionCard, 8)
+        val testConnectionButton = Button(this).apply {
+            text = if (isMarathi()) "कनेक्शन पुन्हा तपासा" else "TEST / REFRESH CONNECTION"
+            setOnClickListener {
+                isEnabled = false
+                val feed = marketDataFeed
+                if (feed is UpstoxWorkerMarketDataFeed) {
+                    feed.refreshNow {
+                        runOnUiThread { isEnabled = true }
+                    }
+                } else {
+                    isEnabled = true
+                    updateFeedStatus(FeedConnectionState.OFFLINE, "Upstox feed is not attached")
+                }
+            }
+        }
+        connectionCard.addView(testConnectionButton, LinearLayout.LayoutParams(-1, dp(46)))
+        addGap(connectionCard, 5)
+        connectionCard.addView(text("Read-only market data. Broker credentials stay on the secure server; no order execution.", 10f, amber))
+        root.addView(connectionCard)
         addGap(root, 12)
         section(root, if (isMarathi()) "सूचना आणि अलर्ट" else "NOTIFICATIONS & ALERTS")
         root.addView(buildAlerts())
