@@ -1456,6 +1456,20 @@ class MainActivity : FragmentActivity() {
         addGap(box, 7)
         chartModeNoteView = text("SIMULATED PREVIEW  •  LIVE FEED NOT CONNECTED", 10f, amber)
         box.addView(chartModeNoteView)
+
+        // The feed may have delivered its first snapshot while the user was
+        // on Settings. A newly-created Chart page must render that cached data
+        // immediately instead of leaving the sample preview visible.
+        latestSnapshot?.let { snapshot ->
+            val liveCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
+            if (liveCandles.isNotEmpty()) {
+                chart.setCandles(liveCandles)
+                chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
+                chartModePill.setTextColor(green)
+                chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
+                chartModeNoteView.setTextColor(green)
+            }
+        }
         return box
     }
 
