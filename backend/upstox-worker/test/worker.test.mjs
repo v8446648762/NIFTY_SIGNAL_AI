@@ -4,18 +4,14 @@ import { handleRequest, extractValidCandles } from "../dist/src/index.js";
 
 const emptyEnv = {
   UPSTOX_ANALYTICS_TOKEN: "",
-  MGROW_APP_PIN: "",
-  MGROW_SESSION_SECRET: "",
   QUOTE_LIMITER: { limit: async () => ({ success: true }) },
-  LOGIN_LIMITER: { limit: async () => ({ success: true }) },
 };
-
 const configuredEnv = {
   ...emptyEnv,
   UPSTOX_ANALYTICS_TOKEN: "server-only-test-token",
-  MGROW_APP_PIN: "83917462",
-  MGROW_SESSION_SECRET: "test-session-secret-at-least-32-characters-long",
 };
+const originalFetch = globalThis.fetch;
+test.afterEach(() => { globalThis.fetch = originalFetch; });
 
 test("GET /health reports worker status without claiming broker connection", async () => {
   const response = await handleRequest(new Request("https://worker.example/health"), emptyEnv);
@@ -34,46 +30,29 @@ test("unknown paths are rejected", async () => {
   assert.equal(response.status, 404);
 });
 
-test("PIN login fails closed when secrets are missing", async () => {
-  const response = await handleRequest(new Request("https://worker.example/v1/auth/login", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin: "83917462" }),
-  }), emptyEnv);
+test("market endpoint reports missing Upstox token without requiring app PIN", async () => {
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/quote"), emptyEnv);
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: "auth_secrets_not_configured" });
+  assert.deepEqual(await response.json(), { error: "upstox_token_not_configured" });
 });
 
-test("PIN login rejects an incorrect PIN", async () => {
+test("PIN login endpoint is not used for live market data", async () => {
   const response = await handleRequest(new Request("https://worker.example/v1/auth/login", {
-    method: "POST", headers: { "content-type": "application/json", "CF-Connecting-IP": "192.0.2.1" },
-    body: JSON.stringify({ pin: "11111111" }),
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin: "not-used" }),
   }), configuredEnv);
-  assert.equal(response.status, 401);
-  assert.deepEqual(await response.json(), { error: "invalid_credentials" });
+  assert.equal(response.status, 405);
 });
 
-test("PIN login issues a short-lived session for the correct PIN", async () => {
-  const response = await handleRequest(new Request("https://worker.example/v1/auth/login", {
-    method: "POST", headers: { "content-type": "application/json", "CF-Connecting-IP": "192.0.2.2" },
-    body: JSON.stringify({ pin: "83917462" }),
+test("public quote endpoint works without app credentials", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "success",
+    data: { "NSE_INDEX:Nifty 50": { last_price: 24123.5, timestamp: new Date().toISOString() } },
+  }), { status: 200 });
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/quote", {
+    headers: { "CF-Connecting-IP": "192.0.2.8" },
   }), configuredEnv);
   assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(typeof body.token, "string");
-  assert.equal(body.expiresIn, 43200);
-});
-
-test("quote endpoint rejects missing bearer credentials", async () => {
-  const response = await handleRequest(new Request("https://worker.example/v1/nifty/quote"), configuredEnv);
-  assert.equal(response.status, 401);
-  assert.deepEqual(await response.json(), { error: "unauthorized" });
-});
-
-test("candles endpoint rejects malformed bearer credentials", async () => {
-  const response = await handleRequest(new Request("https://worker.example/v1/nifty/candles", {
-    headers: { Authorization: "Bearer not-a-valid-session" },
-  }), configuredEnv);
-  assert.equal(response.status, 401);
-  assert.deepEqual(await response.json(), { error: "unauthorized" });
+  assert.equal((await response.json()).data.last_price, 24123.5);
 });
 
 test("Upstox V3 candles are validated and sorted oldest first", () => {
