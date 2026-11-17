@@ -364,7 +364,7 @@ class MainActivity : FragmentActivity() {
             TradeBias.WAIT -> "मराठी: सर्व अटी एकत्र जुळलेल्या नाहीत; पुष्टी येईपर्यंत थांबा."
         }
         if (::signalReasonView.isInitialized) {
-            signalReasonView.text = decision.reasons.joinToString("\\n") + "\\n" + marathiReason
+            signalReasonView.text = decision.reasons.joinToString("\n") + "\n" + marathiReason
         }
 
         if (::vwapValueView.isInitialized) {
