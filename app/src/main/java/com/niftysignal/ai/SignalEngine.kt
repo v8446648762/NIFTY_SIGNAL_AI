@@ -52,7 +52,7 @@ object SignalEngine {
             resistance = technical.resistance
         )
         val latest = fiveMinuteCandles.lastOrNull()
-        val trend = when {
+        val trendBase = when {
             latest == null || indicators.ema9 == null ||
                 indicators.ema21 == null || indicators.rsi14 == null -> "INSUFFICIENT DATA"
             indicators.ema9 > indicators.ema21 &&
@@ -60,7 +60,10 @@ object SignalEngine {
             indicators.ema9 < indicators.ema21 &&
                 (indicators.vwap == null || latest.close < indicators.vwap) -> "BEARISH"
             else -> "SIDEWAYS / MIXED"
-        } + if (indicators.vwap == null) " • VWAP N/A" else ""
+        }
+        val trend = if (trendBase != "INSUFFICIENT DATA" && indicators.vwap == null) {
+            "$trendBase • VWAP N/A"
+        } else trendBase
         return SignalDecision(
             bias = technical.bias,
             trend = trend,
