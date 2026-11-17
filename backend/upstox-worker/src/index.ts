@@ -9,7 +9,7 @@ const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
 
 class UpstreamHttpError extends Error {
-  constructor(readonly status: number) {
+  constructor(readonly status: number, readonly interval: "1" | "5") {
     super("Upstream HTTP request failed");
     this.name = "UpstreamHttpError";
   }
@@ -72,7 +72,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       }
       if (error instanceof UpstreamHttpError) {
         // Expose only the upstream HTTP status, never broker response bodies or tokens.
-        return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status }, 502);
+        return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status, interval: error.interval }, 502);
       }
       return json({ error: "upstream_candle_request_failed", upstreamStatus: null }, 502);
     }
@@ -132,7 +132,7 @@ async function fetchIntradayCandles(
         signal: controller.signal,
       },
     );
-    if (!upstream.ok) throw new UpstreamHttpError(upstream.status);
+    if (!upstream.ok) throw new UpstreamHttpError(upstream.status, interval);
     const payload: unknown = await upstream.json();
     return extractValidCandles(payload);
   } finally {
