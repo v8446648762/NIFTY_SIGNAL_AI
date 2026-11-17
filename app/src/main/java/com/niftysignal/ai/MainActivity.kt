@@ -147,6 +147,9 @@ class MainActivity : FragmentActivity() {
     private var openPaperTrade: PaperTrade? = null
     private val paperHistory = mutableListOf<String>()
     private var marketDataFeed: MarketDataFeed? = null
+    private var liveConnectionStatusView: TextView? = null
+    private var liveConnectButton: Button? = null
+    private var liveDisconnectButton: Button? = null
     private var latestSnapshot: MarketDataSnapshot? = null
     private var currentPage = "Home"
     private var lastAiSignalKey: String? = null
@@ -244,6 +247,24 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun updateFeedStatus(status: FeedConnectionState, message: String? = null) {
+        // Reflect the real asynchronous Worker result on the Settings screen too.
+        liveConnectionStatusView?.let { statusView ->
+            statusView.text = message ?: when (status) {
+                FeedConnectionState.LIVE -> "NIFTY live data received."
+                FeedConnectionState.CONNECTING -> "Connecting to NIFTY read-only live data..."
+                FeedConnectionState.STALE -> "Live data is stale."
+                FeedConnectionState.ERROR -> "Live data connection failed."
+                FeedConnectionState.OFFLINE -> "Live data disconnected."
+            }
+        }
+        liveConnectButton?.let { button ->
+            button.text = when (status) {
+                FeedConnectionState.CONNECTING -> "CONNECTING..."
+                FeedConnectionState.LIVE -> "LIVE DATA CONNECTED"
+                else -> "CONNECT NIFTY LIVE DATA"
+            }
+        }
+        liveDisconnectButton?.isEnabled = status == FeedConnectionState.CONNECTING || status == FeedConnectionState.LIVE
         if (::feedStatusView.isInitialized) {
             val color = when (status) {
                 FeedConnectionState.LIVE -> green
@@ -1168,6 +1189,9 @@ class MainActivity : FragmentActivity() {
             statusView.text = "Secure MGrow Worker URL is not configured."
             return
         }
+        liveConnectionStatusView = statusView
+        liveConnectButton = connectButton
+        liveDisconnectButton = clearButton
         connectButton.isEnabled = false
         try {
             attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl))
