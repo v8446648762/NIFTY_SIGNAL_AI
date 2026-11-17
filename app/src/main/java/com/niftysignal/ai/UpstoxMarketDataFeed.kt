@@ -44,12 +44,13 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                         val candleResponse = getJson("/v1/nifty/candles")
                         val candleData = candleResponse.optJSONObject("data")
                             ?: throw IllegalStateException("NIFTY candles are missing")
-                        val newOneMinute = parseCandles(candleData, "oneMinuteCandles")
+                        val newOneMinute = parseCandles(candleData, "oneMinuteCandles", required = false)
                         val newFiveMinute = parseCandles(candleData, "fiveMinuteCandles")
-                        if (newOneMinute.isEmpty() || newFiveMinute.isEmpty()) {
-                            throw IllegalStateException("Upstox returned no intraday candles")
+                        if (newFiveMinute.isEmpty()) {
+                            throw IllegalStateException("Upstox returned no 5-minute candles")
                         }
-                        oneMinute = newOneMinute
+                        // Keep 5m analysis live even when Upstox temporarily rate-limits 1m.
+                        if (newOneMinute.isNotEmpty()) oneMinute = newOneMinute
                         fiveMinute = newFiveMinute
                         lastCandleFetchAt = now
                     }
@@ -77,7 +78,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                             lastPrice = lastPrice
                         )
                     )
-                    listener.onStatusChanged(FeedConnectionState.LIVE, "NIFTY live data received.")
+                    listener.onStatusChanged(FeedConnectionState.LIVE, if (oneMinute.isEmpty()) "NIFTY 5m live; 1m candles temporarily unavailable." else "NIFTY live data received.")
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
@@ -142,8 +143,8 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
         }
     }
 
-    private fun parseCandles(data: JSONObject, field: String): List<MarketCandle> {
-        val rows = data.optJSONArray(field) ?: throw IllegalStateException("Missing $field")
+    private fun parseCandles(data: JSONObject, field: String, required: Boolean = true): List<MarketCandle> {
+        val rows = data.optJSONArray(field) ?: if (required) throw IllegalStateException("Missing $field") else return emptyList()
         val candles = ArrayList<MarketCandle>(rows.length())
         for (index in 0 until rows.length()) {
             val row = rows.optJSONObject(index) ?: throw IllegalStateException("Malformed candle row")
