@@ -70,7 +70,12 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                     throw error
                 } catch (error: Exception) {
                     val reason = when (error) {
-                        is MarketDataHttpException -> "Worker HTTP ${error.statusCode}: ${error.errorCode}"
+                        is MarketDataHttpException -> buildString {
+                            append("Worker HTTP ${error.statusCode}: ${error.errorCode}")
+                            error.upstreamStatus?.let { append(" (Upstox HTTP $it") }
+                            error.interval?.let { append(", ${it}m") }
+                            if (error.upstreamStatus != null) append(")")
+                        }
                         is java.net.SocketTimeoutException -> "Live data server timed out."
                         is java.io.IOException -> "Network connection failed."
                         else -> "Live data unavailable (${error.javaClass.simpleName})."
@@ -106,9 +111,11 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (status !in 200..299) {
-                val errorCode = runCatching { JSONObject(body).optString("error", "http_error") }
-                    .getOrDefault("http_error")
-                throw MarketDataHttpException(status, errorCode)
+                val errorBody = runCatching { JSONObject(body) }.getOrNull()
+                val errorCode = errorBody?.optString("error", "http_error") ?: "http_error"
+                val upstreamStatus = errorBody?.optInt("upstreamStatus")?.takeIf { it > 0 }
+                val interval = errorBody?.optString("interval")?.takeIf { it == "1" || it == "5" }
+                throw MarketDataHttpException(status, errorCode, upstreamStatus, interval)
             }
             return JSONObject(body)
         } finally {
@@ -154,5 +161,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
 /** Safe, structured HTTP error returned by the MGrow Worker. */
 private class MarketDataHttpException(
     val statusCode: Int,
-    val errorCode: String
+    val errorCode: String,
+    val upstreamStatus: Int? = null,
+    val interval: String? = null
 ) : java.io.IOException("MGrow Worker HTTP $statusCode: $errorCode")
