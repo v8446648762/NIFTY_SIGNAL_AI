@@ -191,8 +191,8 @@ class MainActivity : FragmentActivity() {
 
 
     /**
-     * Future Upstox integration point. The adapter supplies candles through
-     * MarketDataFeed; the dashboard itself never handles broker orders or secrets.
+     * Upstox market-data adapter. The dashboard consumes candles through
+     * MarketDataFeed and never handles broker orders or broker secrets.
      */
     fun attachMarketDataFeed(feed: MarketDataFeed) {
         if (marketDataFeed === feed) return
