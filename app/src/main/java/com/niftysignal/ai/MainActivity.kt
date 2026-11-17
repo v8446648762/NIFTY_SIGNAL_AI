@@ -176,6 +176,7 @@ class MainActivity : FragmentActivity() {
     private lateinit var resistanceValueView: TextView
     private lateinit var chartModePill: TextView
     private lateinit var chartModeNoteView: TextView
+    private lateinit var headerModePill: TextView
 
     private val marketFeedListener = object : MarketDataFeed.Listener {
         override fun onStatusChanged(status: FeedConnectionState, message: String?) {
@@ -224,13 +225,22 @@ class MainActivity : FragmentActivity() {
             feedStatusView.setTextColor(color)
             feedStatusView.background = rounded(Color.argb(190, 41, 38, 66), color, 30)
         }
+        if (::headerModePill.isInitialized) {
+            headerModePill.text = when (status) {
+                FeedConnectionState.LIVE -> "● LIVE DATA"
+                FeedConnectionState.STALE -> "● STALE DATA"
+                FeedConnectionState.CONNECTING -> "● CONNECTING"
+                FeedConnectionState.ERROR -> "● FEED ERROR"
+                FeedConnectionState.OFFLINE -> "● OFFLINE"
+            }
+            headerModePill.setTextColor(color)
+            headerModePill.background = rounded(Color.argb(190, 41, 38, 66), color, 30)
+        }
         if (status == FeedConnectionState.OFFLINE ||
-            status == FeedConnectionState.STALE ||
-            status == FeedConnectionState.ERROR
+            status == FeedConnectionState.ERROR ||
+            status == FeedConnectionState.CONNECTING
         ) {
             clearLiveDashboard(message ?: "Live market data is unavailable.")
-        } else if (status == FeedConnectionState.CONNECTING) {
-            clearLiveDashboard(message ?: "Connecting to market data...")
         }
     }
 
@@ -302,7 +312,10 @@ class MainActivity : FragmentActivity() {
         }
 
         latestSnapshot = snapshot
-        updateFeedStatus(FeedConnectionState.LIVE, null)
+        updateFeedStatus(
+            if (snapshot.isStale) FeedConnectionState.STALE else FeedConnectionState.LIVE,
+            snapshot.staleReason
+        )
 
         val latest = snapshot.fiveMinuteCandles.last()
         if (::indexPriceView.isInitialized) indexPriceView.text = formatMarketValue(latest.close)
@@ -330,8 +343,9 @@ class MainActivity : FragmentActivity() {
         if (::dayLowValueView.isInitialized) dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
-        recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
-        val biasText = when (decision.bias) {
+        if (!snapshot.isStale) recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
+        val displayedBias = if (snapshot.isStale) TradeBias.WAIT else decision.bias
+        val biasText = when (displayedBias) {
             TradeBias.BUY_CE -> "BUY CE"
             TradeBias.BUY_PE -> "BUY PE"
             TradeBias.WAIT -> "WAIT"
@@ -339,7 +353,7 @@ class MainActivity : FragmentActivity() {
         if (::signalBiasView.isInitialized) {
             signalBiasView.text = biasText
             signalBiasView.setTextColor(
-                when (decision.bias) {
+                when (displayedBias) {
                     TradeBias.BUY_CE -> green
                     TradeBias.BUY_PE -> red
                     TradeBias.WAIT -> amber
@@ -347,24 +361,29 @@ class MainActivity : FragmentActivity() {
             )
         }
         if (::signalStatusView.isInitialized) {
-            signalStatusView.text = if (decision.confirmed) "SETUP CONFIRMED" else "NO CONFIRMED SETUP"
-            val signalColor = if (decision.confirmed) green else amber
+            signalStatusView.text = when {
+                snapshot.isStale -> "STALE DATA • SIGNALS PAUSED"
+                decision.confirmed -> "SETUP CONFIRMED"
+                else -> "NO CONFIRMED SETUP"
+            }
+            val signalColor = if (decision.confirmed && !snapshot.isStale) green else amber
             signalStatusView.setTextColor(signalColor)
             signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), signalColor, 30)
         }
         if (::signalTrendValueView.isInitialized) signalTrendValueView.text = decision.trend
         if (::signalSetupValueView.isInitialized) signalSetupValueView.text =
-            if (decision.confirmed) "5M VALID" else "WAIT"
+            if (snapshot.isStale) "PAUSED" else if (decision.confirmed) "5M VALID" else "WAIT"
         if (::signalConfirmValueView.isInitialized) signalConfirmValueView.text =
-            if (decision.confirmed) "1M OK" else "PENDING"
+            if (snapshot.isStale) "STALE" else if (decision.confirmed) "1M OK" else "PENDING"
 
-        val marathiReason = when (decision.bias) {
-            TradeBias.BUY_CE -> "मराठी: 5 मिनिटांचा तेजीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
-            TradeBias.BUY_PE -> "मराठी: 5 मिनिटांचा मंदीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
-            TradeBias.WAIT -> "मराठी: सर्व अटी एकत्र जुळलेल्या नाहीत; पुष्टी येईपर्यंत थांबा."
+        val marathiReason = when {
+            snapshot.isStale -> "मराठी: डेटा जुना आहे. बाजार पुन्हा सुरू होईपर्यंत Live संकेत थांबवले आहेत."
+            decision.bias == TradeBias.BUY_CE -> "मराठी: 5 मिनिटांचा तेजीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
+            decision.bias == TradeBias.BUY_PE -> "मराठी: 5 मिनिटांचा मंदीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
+            else -> "मराठी: सर्व अटी एकत्र जुळलेल्या नाहीत; पुष्टी येईपर्यंत थांबा."
         }
         if (::signalReasonView.isInitialized) {
-            signalReasonView.text = decision.reasons.joinToString("\n") + "\n" + marathiReason
+            signalReasonView.text = (if (snapshot.isStale) "Historical candles only; no live signal.\n" else decision.reasons.joinToString("\n") + "\n") + marathiReason
         }
 
         if (::vwapValueView.isInitialized) {
@@ -382,12 +401,16 @@ class MainActivity : FragmentActivity() {
             chart.setCandles(visibleCandles)
         }
         if (::chartModePill.isInitialized) {
-            chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
-            chartModePill.setTextColor(green)
+            chartModePill.text = (if (snapshot.isStale) "LAST " else "LIVE ") + if (tf == "5 MIN") "5M" else "1M"
+            chartModePill.setTextColor(if (snapshot.isStale) amber else green)
         }
         if (::chartModeNoteView.isInitialized) {
-            chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
-            chartModeNoteView.setTextColor(green)
+            chartModeNoteView.text = if (snapshot.isStale) {
+                "LAST AVAILABLE CANDLES  •  NOT LIVE  •  SIGNALS PAUSED"
+            } else {
+                "LIVE MARKET DATA  •  " + tf + " CANDLES"
+            }
+            chartModeNoteView.setTextColor(if (snapshot.isStale) amber else green)
         }
     }
 
@@ -1241,7 +1264,8 @@ class MainActivity : FragmentActivity() {
         titleCol.addView(text("AI NIFTY OPTIONS TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         wrap.addView(buildDateTimeView())
-        wrap.addView(pill("●  DEMO MODE", amber))
+        headerModePill = pill("● CONNECTING", cyan)
+        wrap.addView(headerModePill)
         return wrap
     }
 
