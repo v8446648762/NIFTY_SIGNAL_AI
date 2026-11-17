@@ -3,5 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2026-11-16"
 
 [vars]
-# Secrets are configured separately with: npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
-# and: npx wrangler secret put MGROW_CLIENT_KEY
+# Set UPSTOX_ANALYTICS_TOKEN as a Worker secret. Read-only NIFTY endpoints are public and protected by per-IP rate limiting.
+
+[[ratelimits]]
+name = "QUOTE_LIMITER"
+# Must be a positive integer unique within this Cloudflare account.
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "LOGIN_LIMITER"
+namespace_id = "1002"
+simple = { limit = 5, period = 60 }
