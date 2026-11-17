@@ -8,7 +8,6 @@ const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
 const CANDLE_CACHE_TTL_MS = 55_000;
-const CANDLE_STALE_FALLBACK_MS = 5 * 60_000;
 let candleCache: { body: Record<string, unknown>; cachedAt: number } | null = null;
 let candleFetchInFlight: Promise<Record<string, unknown>> | null = null;
 
@@ -83,10 +82,6 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         return json({ error: "upstream_timeout" }, 504);
       }
       if (error instanceof UpstreamHttpError) {
-        // If Upstox throttles a refresh, serve only a short-lived previously validated snapshot.
-        if (error.status === 429 && candleCache && Date.now() - candleCache.cachedAt <= CANDLE_STALE_FALLBACK_MS) {
-          return json({ ...candleCache.body, cache: "stale_fallback" });
-        }
         return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status, interval: error.interval }, 502);
       }
       if (error instanceof Error && error.message === "invalid_upstream_candle_payload") {
