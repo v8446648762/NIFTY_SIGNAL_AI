@@ -42,22 +42,19 @@ import kotlin.math.min
 class MainActivity : FragmentActivity() {
     private var appUnlocked = false
     private var authenticationInProgress = false
-    private var pinLoginInProgress = false
-    // Short-lived MGrow session token is memory-only; the PIN is never persisted.
-    private var mgrowSessionToken: String? = null
 
     private fun isAppLockEnabled(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
 
     override fun onResume() {
         super.onResume()
-        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress && !pinLoginInProgress) {
+        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress) {
             authenticateAppLock()
         }
     }
 
     override fun onStop() {
-        if (isAppLockEnabled() && !authenticationInProgress && !pinLoginInProgress) appUnlocked = false
+        if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
         super.onStop()
     }
 
@@ -1100,41 +1097,22 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
-    private fun beginPinLogin(pinInput: EditText, statusView: TextView, loginButton: Button, clearButton: Button) {
-        val pin = pinInput.text?.toString().orEmpty()
-        if (pin.length < 8) {
-            statusView.text = "Enter your MGrow PIN (minimum 8 characters)."
-            return
-        }
+    private fun beginLiveDataConnection(statusView: TextView, connectButton: Button, clearButton: Button) {
         val workerUrl = getString(R.string.mgrow_worker_base_url).trim().trimEnd('/')
         if (!workerUrl.startsWith("https://")) {
             statusView.text = "Secure MGrow Worker URL is not configured."
             return
         }
-        loginButton.isEnabled = false
-        pinLoginInProgress = true
-        lifecycleScope.launch {
-            try {
-                val token = withContext(Dispatchers.IO) { MgrowPinAuth.login(workerUrl, pin) }
-                mgrowSessionToken = token
-                pinInput.text?.clear()
-                clearButton.isEnabled = true
-                loginButton.text = "MGROW CONNECTED"
-                statusView.text = "MGrow PIN verified • Connecting to NIFTY data..."
-                attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, token))
-            } catch (error: Exception) {
-                val detail = when (error.message) {
-                    "invalid_credentials" -> "Incorrect MGrow PIN. Try again."
-                    "login_rate_limit_exceeded" -> "Too many PIN attempts. Wait 60 seconds."
-                    "auth_secrets_not_configured" -> "MGrow PIN login is not configured on the secure server yet."
-                    else -> "MGrow login failed: ${error.message ?: error.javaClass.simpleName}"
-                }
-                statusView.text = detail
-                Toast.makeText(this@MainActivity, detail, Toast.LENGTH_LONG).show()
-            } finally {
-                pinLoginInProgress = false
-                loginButton.isEnabled = true
-            }
+        connectButton.isEnabled = false
+        try {
+            attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl))
+            statusView.text = "Connecting to NIFTY read-only live data..."
+            connectButton.text = "CONNECTING..."
+            clearButton.isEnabled = true
+        } catch (error: Exception) {
+            statusView.text = "Live data connection failed: ${error.message ?: error.javaClass.simpleName}"
+        } finally {
+            connectButton.isEnabled = true
         }
     }
 
@@ -1156,40 +1134,31 @@ class MainActivity : FragmentActivity() {
             return row
         }
 
-        section(root, "MGROW PIN LOGIN")
+        section(root, "NIFTY LIVE DATA CONNECTION")
         val authStatus = text(
-            if (mgrowSessionToken == null) "Not connected • Enter your secure MGrow PIN" else "MGrow session active in memory",
+            "Fingerprint is only for local app lock. Live market data connects separately through the secure read-only server.",
             12f, muted
         )
         root.addView(authStatus)
-        val pinInput = EditText(this).apply {
-            hint = "MGrow PIN (minimum 8 characters)"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setSingleLine(true)
-            setTextColor(white)
-            setHintTextColor(muted)
-        }
-        root.addView(pinInput)
         lateinit var clearSession: Button
-        val loginButton = Button(this).apply {
-            text = if (mgrowSessionToken == null) "CONNECT MGROW" else "MGROW CONNECTED"
-            setOnClickListener { beginPinLogin(pinInput, authStatus, this, clearSession) }
+        val connectButton = Button(this).apply {
+            text = "CONNECT NIFTY LIVE DATA"
+            setOnClickListener { beginLiveDataConnection(authStatus, this, clearSession) }
         }
-        root.addView(loginButton)
+        root.addView(connectButton)
         clearSession = Button(this).apply {
-            text = "CLEAR MGROW SESSION"
-            isEnabled = mgrowSessionToken != null
+            text = "DISCONNECT LIVE DATA"
+            isEnabled = marketDataFeed != null
             setOnClickListener {
-                mgrowSessionToken = null
                 detachMarketDataFeed()
-                authStatus.text = "Not connected"
-                loginButton.text = "CONNECT MGROW"
+                authStatus.text = "Live data disconnected. Fingerprint app lock remains separate."
+                connectButton.text = "CONNECT NIFTY LIVE DATA"
                 isEnabled = false
             }
         }
         root.addView(clearSession)
         root.addView(text(
-            "Read-only market data only. Broker token stays on the secure server; no order placement.",
+            "Read-only NIFTY data only. Upstox token stays on the secure server; no order placement. Data endpoint is public and rate-limited.",
             10f, amber
         ))
         addGap(root, 12)
