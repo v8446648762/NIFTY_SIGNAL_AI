@@ -305,26 +305,29 @@ class MainActivity : FragmentActivity() {
         updateFeedStatus(FeedConnectionState.LIVE, null)
 
         val latest = snapshot.fiveMinuteCandles.last()
-        indexPriceView.text = formatMarketValue(latest.close)
-        indexHintView.text = "Latest validated 5-minute NIFTY candle • Feed received just now"
+        if (::indexPriceView.isInitialized) indexPriceView.text = formatMarketValue(latest.close)
+        if (::indexHintView.isInitialized) indexHintView.text =
+            "Latest validated 5-minute NIFTY candle • Feed received just now"
 
         val previousClose = snapshot.previousClose?.takeIf { it.isFinite() && it > 0.0 }
-        if (previousClose != null) {
-            val change = latest.close - previousClose
-            val percent = change / previousClose * 100.0
-            changeValueView.text = String.format(java.util.Locale.US, "%+.2f (%.2f%%)", change, percent)
-            changeValueView.setTextColor(if (change >= 0.0) green else red)
-        } else {
-            changeValueView.text = "—"
-            changeValueView.setTextColor(muted)
+        if (::changeValueView.isInitialized) {
+            if (previousClose != null) {
+                val change = latest.close - previousClose
+                val percent = change / previousClose * 100.0
+                changeValueView.text = String.format(java.util.Locale.US, "%+.2f (%.2f%%)", change, percent)
+                changeValueView.setTextColor(if (change >= 0.0) green else red)
+            } else {
+                changeValueView.text = "—"
+                changeValueView.setTextColor(muted)
+            }
         }
 
         val dayHigh = snapshot.dayHigh?.takeIf { it.isFinite() && it > 0.0 }
             ?: snapshot.fiveMinuteCandles.maxOfOrNull { it.high }
         val dayLow = snapshot.dayLow?.takeIf { it.isFinite() && it > 0.0 }
             ?: snapshot.fiveMinuteCandles.minOfOrNull { it.low }
-        dayHighValueView.text = formatMarketValue(dayHigh)
-        dayLowValueView.text = formatMarketValue(dayLow)
+        if (::dayHighValueView.isInitialized) dayHighValueView.text = formatMarketValue(dayHigh)
+        if (::dayLowValueView.isInitialized) dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
         recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
@@ -333,42 +336,59 @@ class MainActivity : FragmentActivity() {
             TradeBias.BUY_PE -> "BUY PE"
             TradeBias.WAIT -> "WAIT"
         }
-        signalBiasView.text = biasText
-        signalBiasView.setTextColor(
-            when (decision.bias) {
-                TradeBias.BUY_CE -> green
-                TradeBias.BUY_PE -> red
-                TradeBias.WAIT -> amber
-            }
-        )
-        signalStatusView.text = if (decision.confirmed) "SETUP CONFIRMED" else "NO CONFIRMED SETUP"
-        val signalColor = if (decision.confirmed) green else amber
-        signalStatusView.setTextColor(signalColor)
-        signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), signalColor, 30)
-        signalTrendValueView.text = decision.trend
-        signalSetupValueView.text = if (decision.confirmed) "5M VALID" else "WAIT"
-        signalConfirmValueView.text = if (decision.confirmed) "1M OK" else "PENDING"
+        if (::signalBiasView.isInitialized) {
+            signalBiasView.text = biasText
+            signalBiasView.setTextColor(
+                when (decision.bias) {
+                    TradeBias.BUY_CE -> green
+                    TradeBias.BUY_PE -> red
+                    TradeBias.WAIT -> amber
+                }
+            )
+        }
+        if (::signalStatusView.isInitialized) {
+            signalStatusView.text = if (decision.confirmed) "SETUP CONFIRMED" else "NO CONFIRMED SETUP"
+            val signalColor = if (decision.confirmed) green else amber
+            signalStatusView.setTextColor(signalColor)
+            signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), signalColor, 30)
+        }
+        if (::signalTrendValueView.isInitialized) signalTrendValueView.text = decision.trend
+        if (::signalSetupValueView.isInitialized) signalSetupValueView.text =
+            if (decision.confirmed) "5M VALID" else "WAIT"
+        if (::signalConfirmValueView.isInitialized) signalConfirmValueView.text =
+            if (decision.confirmed) "1M OK" else "PENDING"
 
         val marathiReason = when (decision.bias) {
             TradeBias.BUY_CE -> "मराठी: 5 मिनिटांचा तेजीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
             TradeBias.BUY_PE -> "मराठी: 5 मिनिटांचा मंदीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
             TradeBias.WAIT -> "मराठी: सर्व अटी एकत्र जुळलेल्या नाहीत; पुष्टी येईपर्यंत थांबा."
         }
-        signalReasonView.text = decision.reasons.joinToString("\n") + "\n" + marathiReason
+        if (::signalReasonView.isInitialized) {
+            signalReasonView.text = decision.reasons.joinToString("\\n") + "\\n" + marathiReason
+        }
 
-        vwapValueView.text = formatMarketValue(decision.indicators.vwap)
-        ema9ValueView.text = formatMarketValue(decision.indicators.ema9)
-        ema21ValueView.text = formatMarketValue(decision.indicators.ema21)
-        rsiValueView.text = formatMarketValue(decision.indicators.rsi14)
-        supportValueView.text = formatMarketValue(decision.indicators.support)
-        resistanceValueView.text = formatMarketValue(decision.indicators.resistance)
+        if (::vwapValueView.isInitialized) {
+            vwapValueView.text = decision.indicators.vwap?.let(::formatMarketValue)
+                ?: "N/A (index volume 0)"
+        }
+        if (::ema9ValueView.isInitialized) ema9ValueView.text = formatMarketValue(decision.indicators.ema9)
+        if (::ema21ValueView.isInitialized) ema21ValueView.text = formatMarketValue(decision.indicators.ema21)
+        if (::rsiValueView.isInitialized) rsiValueView.text = formatMarketValue(decision.indicators.rsi14)
+        if (::supportValueView.isInitialized) supportValueView.text = formatMarketValue(decision.indicators.support)
+        if (::resistanceValueView.isInitialized) resistanceValueView.text = formatMarketValue(decision.indicators.resistance)
 
-        val visibleCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
-        chart.setCandles(visibleCandles)
-        chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
-        chartModePill.setTextColor(green)
-        chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
-        chartModeNoteView.setTextColor(green)
+        if (::chart.isInitialized) {
+            val visibleCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
+            chart.setCandles(visibleCandles)
+        }
+        if (::chartModePill.isInitialized) {
+            chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
+            chartModePill.setTextColor(green)
+        }
+        if (::chartModeNoteView.isInitialized) {
+            chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
+            chartModeNoteView.setTextColor(green)
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -607,6 +627,8 @@ class MainActivity : FragmentActivity() {
             setPadding(0, dp(8), 0, dp(12))
         })
         renderBottomNavigation()
+        // Refresh whichever live-data widgets exist on the newly opened page.
+        latestSnapshot?.let { applyMarketSnapshot(it) }
     }
 
     private fun renderBottomNavigation() {
