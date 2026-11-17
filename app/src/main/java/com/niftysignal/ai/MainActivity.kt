@@ -536,6 +536,8 @@ class MainActivity : FragmentActivity() {
         setContentView(root)
         root.requestApplyInsets()
         showPage("Home")
+        // Live NIFTY candles are read through the Cloudflare Worker; no broker token is stored in the APK.
+        attachMarketDataFeed(UpstoxWorkerMarketDataFeed())
     }
 
     private fun showPage(page: String) {
@@ -1828,7 +1830,36 @@ class MainActivity : FragmentActivity() {
                         body
                     )
                 }
-                c.drawText("LIVE CANDLES", l, dp(12).toFloat(), labelPaint)
+                val closes = candles.map { it.close }
+                val ema9Values = TechnicalAnalysis.emaSeries(closes, 9)
+                val ema21Values = TechnicalAnalysis.emaSeries(closes, 21)
+                val ema9Path = Path()
+                val ema21Path = Path()
+                var started9 = false
+                var started21 = false
+                candles.forEachIndexed { i, _ ->
+                    val x = l + step * (i + 0.5f)
+                    ema9Values[i]?.let { value ->
+                        if (!started9) { ema9Path.moveTo(x, liveY(value)); started9 = true }
+                        else ema9Path.lineTo(x, liveY(value))
+                    }
+                    ema21Values[i]?.let { value ->
+                        if (!started21) { ema21Path.moveTo(x, liveY(value)); started21 = true }
+                        else ema21Path.lineTo(x, liveY(value))
+                    }
+                }
+                line.color = cyan
+                c.drawPath(ema9Path, line)
+                line.color = amber
+                c.drawPath(ema21Path, line)
+                val vwap = TechnicalAnalysis.sessionVwap(candles)
+                if (vwap != null) {
+                    line.color = white
+                    line.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5).toFloat(), dp(4).toFloat()), 0f)
+                    c.drawLine(l, liveY(vwap), r, liveY(vwap), line)
+                    line.pathEffect = null
+                }
+                c.drawText("LIVE • EMA 9 / EMA 21" + if (vwap == null) " • VWAP N/A" else " • VWAP", l, dp(12).toFloat(), labelPaint)
                 return
             }
 
