@@ -221,11 +221,6 @@ class MainActivity : FragmentActivity() {
             FeedConnectionState.OFFLINE -> amber
         }
         if (::feedStatusView.isInitialized) {
-                FeedConnectionState.LIVE -> green
-                FeedConnectionState.CONNECTING -> cyan
-                FeedConnectionState.STALE, FeedConnectionState.ERROR -> red
-                FeedConnectionState.OFFLINE -> amber
-            }
             feedStatusView.text = "● FEED " + status.name
             feedStatusView.setTextColor(color)
             feedStatusView.background = rounded(Color.argb(190, 41, 38, 66), color, 30)
