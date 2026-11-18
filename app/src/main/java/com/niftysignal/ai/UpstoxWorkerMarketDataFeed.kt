@@ -92,15 +92,20 @@ class UpstoxWorkerMarketDataFeed : MarketDataFeed {
             val now = System.currentTimeMillis()
             val oneMinute = parseCandles(data.optJSONArray("oneMinuteCandles"), 60_000L, now)
             val fiveMinute = parseCandles(data.optJSONArray("fiveMinuteCandles"), 300_000L, now)
-            if (oneMinute.isEmpty() || fiveMinute.isEmpty()) {
-                throw IllegalStateException("Worker returned no completed 1-minute or 5-minute candles")
+            if (fiveMinute.isEmpty()) {
+                throw IllegalStateException("Worker returned no completed 5-minute candles")
             }
-            val latestOneMinuteEnd = oneMinute.last().timestampMillis + 60_000L
             val latestFiveMinuteEnd = fiveMinute.last().timestampMillis + 300_000L
-            val stale = now - latestOneMinuteEnd > 180_000L || now - latestFiveMinuteEnd > 600_000L
-            val staleMessage = if (stale) {
-                "Showing last completed NIFTY candles. Market may be closed or feed delayed; live signals are paused."
-            } else null
+            val fiveMinuteStale = now - latestFiveMinuteEnd > 600_000L
+            val oneMinuteStale = oneMinute.isNotEmpty() &&
+                now - (oneMinute.last().timestampMillis + 60_000L) > 180_000L
+            val stale = fiveMinuteStale || oneMinuteStale
+            val staleMessage = when {
+                fiveMinuteStale -> "Showing last completed NIFTY 5-minute candles. Market may be closed or feed delayed; live signals are paused."
+                oneMinute.isEmpty() -> "5-minute feed available; 1-minute confirmation unavailable. Indicators remain available and signals wait for confirmation."
+                oneMinuteStale -> "5-minute feed available; 1-minute confirmation is stale. Signals are paused."
+                else -> null
+            }
             target.onSnapshot(
                 MarketDataSnapshot(
                     fiveMinuteCandles = fiveMinute,
