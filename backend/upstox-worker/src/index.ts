@@ -1,9 +1,5 @@
-import { verifyGoogleIdToken } from "./google-auth.js";
-
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
-  GOOGLE_CLIENT_ID: string;
-  MGROW_ALLOWED_GOOGLE_EMAIL: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
@@ -39,21 +35,19 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles") {
     return json({ error: "not_found" }, 404);
   }
-  if (!env.UPSTOX_ANALYTICS_TOKEN || !env.GOOGLE_CLIENT_ID || !env.MGROW_ALLOWED_GOOGLE_EMAIL) {
+  if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "server_secrets_not_configured" }, 503);
   }
 
-  const authorization = request.headers.get("authorization") ?? "";
-  const match = authorization.match(/^Bearer ([^\s]+)$/i);
-  if (!match) return json({ error: "unauthorized" }, 401);
-  const identity = await verifyGoogleIdToken(match[1], env);
-  if (!identity) return json({ error: "unauthorized" }, 401);
+  // Cloudflare overwrites CF-Connecting-IP at its edge. Only fixed public NIFTY data is exposed.
+  const clientIp = request.headers.get("CF-Connecting-IP")?.trim();
+  if (!clientIp) return json({ error: "client_ip_unavailable" }, 503);
 
   if (!env.QUOTE_LIMITER || typeof env.QUOTE_LIMITER.limit !== "function") {
     return json({ error: "rate_limiter_not_configured" }, 503);
   }
   try {
-    const rateLimit = await env.QUOTE_LIMITER.limit({ key: identity.email.toLowerCase() });
+    const rateLimit = await env.QUOTE_LIMITER.limit({ key: clientIp });
     if (!rateLimit.success) {
       return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
     }
