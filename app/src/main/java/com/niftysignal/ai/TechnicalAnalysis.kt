@@ -34,11 +34,12 @@ object TechnicalAnalysis {
         candles5m: List<MarketCandle>,
         candles1m: List<MarketCandle>
     ): TechnicalSnapshot {
-        if (candles5m.size < MIN_PRIMARY_CANDLES || candles1m.size < MIN_CONFIRM_CANDLES) {
-            return waitForData("Insufficient completed candles: need at least 22 five-minute and 2 one-minute candles.")
+        if (candles5m.size < MIN_PRIMARY_CANDLES) {
+            return waitForData("Insufficient completed five-minute candles: need at least 22.")
         }
-        if (!candles5m.all(::isValid) || !candles1m.all(::isValid) ||
-            !isChronological(candles5m) || !isChronological(candles1m)
+        if (!candles5m.all(::isValid) || !isChronological(candles5m) ||
+            (candles1m.isNotEmpty() &&
+                (!candles1m.all(::isValid) || !isChronological(candles1m)))
         ) {
             return waitForData("Invalid or out-of-order OHLCV candle data.")
         }
@@ -54,11 +55,7 @@ object TechnicalAnalysis {
 
         val last5 = candles5m.last()
         val previous5 = candles5m[candles5m.lastIndex - 1]
-        val last1 = candles1m.last()
-        val previous1 = candles1m[candles1m.lastIndex - 1]
-
-        // When volume is absent (as in the current NIFTY index response), VWAP is
-        // shown as unavailable and is not fabricated. EMA, RSI and price action remain usable.
+        // 5m indicators are calculated independently; 1m candles are only for confirmation.
         val bullish5m = ema9 > ema21 && rsi14 > 55.0 &&
             last5.close > previous5.high &&
             (vwap == null || last5.close > vwap)
@@ -66,8 +63,11 @@ object TechnicalAnalysis {
             last5.close < previous5.low &&
             (vwap == null || last5.close < vwap)
 
-        val bullish1mConfirm = last1.close > previous1.high
-        val bearish1mConfirm = last1.close < previous1.low
+        val confirmationAvailable = candles1m.size >= MIN_CONFIRM_CANDLES
+        val bullish1mConfirm = confirmationAvailable &&
+            candles1m.last().close > candles1m[candles1m.lastIndex - 1].high
+        val bearish1mConfirm = confirmationAvailable &&
+            candles1m.last().close < candles1m[candles1m.lastIndex - 1].low
 
         val bias = when {
             bullish5m && bullish1mConfirm -> TradeBias.BUY_CE
@@ -75,16 +75,18 @@ object TechnicalAnalysis {
             else -> TradeBias.WAIT
         }
 
-        val reason = when (bias) {
-            TradeBias.BUY_CE -> if (vwap == null)
+        val reason = when {
+            !confirmationAvailable ->
+                "5m indicators are available; waiting for at least 2 completed 1m candles for confirmation."
+            bias == TradeBias.BUY_CE && vwap == null ->
                 "5m EMA/RSI bullish breakout and 1m confirmation. VWAP unavailable: index volume is zero."
-            else "5m bullish conditions and 1m breakout confirmation."
-            TradeBias.BUY_PE -> if (vwap == null)
+            bias == TradeBias.BUY_CE -> "5m bullish conditions and 1m breakout confirmation."
+            bias == TradeBias.BUY_PE && vwap == null ->
                 "5m EMA/RSI bearish breakdown and 1m confirmation. VWAP unavailable: index volume is zero."
-            else "5m bearish conditions and 1m breakdown confirmation."
-            TradeBias.WAIT -> if (vwap == null)
+            bias == TradeBias.BUY_PE -> "5m bearish conditions and 1m breakdown confirmation."
+            vwap == null ->
                 "Waiting: 5m EMA/RSI price-action setup and 1m confirmation are not aligned. VWAP unavailable."
-            else "Full 5m setup and 1m confirmation are not aligned."
+            else -> "Full 5m setup and 1m confirmation are not aligned."
         }
 
         val recent = candles5m.takeLast(20)
