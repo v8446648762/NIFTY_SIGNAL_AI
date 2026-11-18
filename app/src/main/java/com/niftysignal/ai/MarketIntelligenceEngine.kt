@@ -69,8 +69,9 @@ object MarketIntelligenceEngine {
             strength == "MODERATE" -> 35.0
             else -> 55.0
         }
-        val bodyRatio = kotlin.math.abs(last.close - last.open) /
-            (last.high - last.low).takeIf { it > 0.0 }!!.coerceAtLeast(0.000001)
+        val candleRange = (last.high - last.low).coerceAtLeast(0.000001)
+        val bodyRatio = (kotlin.math.abs(last.close - last.open) / candleRange)
+            .coerceIn(0.0, 1.0)
         val priceActionRisk = (
             65.0 - bodyRatio * 35.0 +
                 (if (falseBreakout) 25.0 else 0.0) +
