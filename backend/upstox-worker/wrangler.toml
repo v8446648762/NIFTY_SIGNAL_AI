@@ -2,12 +2,7 @@ name = "mgrow-upstox-readonly"
 main = "src/index.ts"
 compatibility_date = "2026-11-16"
 
-[vars]
-# Set GOOGLE_CLIENT_ID and MGROW_ALLOWED_GOOGLE_EMAIL as non-secret Worker variables.
-# Set UPSTOX_ANALYTICS_TOKEN with: npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
-
 [[ratelimits]]
 name = "QUOTE_LIMITER"
-# Must be a positive integer unique within this Cloudflare account.
 namespace_id = "1001"
 simple = { limit = 30, period = 60 }
