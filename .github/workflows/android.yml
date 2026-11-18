@@ -12,6 +12,7 @@ on:
       - feature/mgrow-build157-upstox-integration
       - fix/ai-signal-market-intelligence-risk
       - feature/mgrow-background-live-data
+      - fix/upstox-candle-429-backoff
 
 jobs:
   build:
