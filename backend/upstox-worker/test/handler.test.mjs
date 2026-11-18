@@ -73,7 +73,7 @@ test("fails closed when rate limiter throws", async () => {
 test("ignores caller-supplied instrument and requests fixed NIFTY 50", async () => {
   let requestedUrl = "";
   globalThis.fetch = async (url) => { requestedUrl = String(url); return new Response(JSON.stringify(quotePayload()), { status: 200 }); };
-  const response = await handleRequest(request("https://worker.test/v1/nifty/quote?instrument_key=UNSAFE"));
+  const response = await handleRequest(request("https://worker.test/v1/nifty/quote?instrument_key=UNSAFE"), env);
   assert.equal(response.status, 200);
   assert.match(requestedUrl, /instrument_key=NSE_INDEX%7CNifty%2050/);
   assert.equal(requestedUrl.includes("UNSAFE"), false);
