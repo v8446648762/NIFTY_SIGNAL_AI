@@ -10,6 +10,7 @@ on:
       - feature/testing-lab-advanced-ai-ui
       - feature/live-candles-indicators-smart-ai
       - feature/mgrow-build157-upstox-integration
+      - fix/ai-signal-market-intelligence-risk
 
 jobs:
   build:
