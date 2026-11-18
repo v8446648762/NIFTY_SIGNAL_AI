@@ -15,22 +15,15 @@ import java.net.URL
 import java.time.OffsetDateTime
 
 /** Read-only MGrow Worker poller. The Upstox token remains server-side. */
-class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : MarketDataFeed {
+class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
     private val baseUrl = workerBaseUrl.trim().trimEnd('/')
-    @Volatile private var idToken: String? = googleIdToken
     private var scope: CoroutineScope? = null
     private var pollJob: Job? = null
 
     override fun connect(listener: MarketDataFeed.Listener) {
-        val sessionToken = idToken
         stopPolling()
-        idToken = sessionToken
         if (baseUrl.isBlank() || !baseUrl.startsWith("https://")) {
             listener.onStatusChanged(FeedConnectionState.ERROR, "Secure MGrow Worker URL is not configured.")
-            return
-        }
-        if (idToken.isNullOrBlank()) {
-            listener.onStatusChanged(FeedConnectionState.ERROR, "Google sign-in is required.")
             return
         }
         val feedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -90,7 +83,6 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
 
     override fun disconnect() {
         stopPolling()
-        idToken = null
     }
 
     private fun stopPolling() {
@@ -101,13 +93,11 @@ class UpstoxMarketDataFeed(workerBaseUrl: String, googleIdToken: String) : Marke
     }
 
     private fun getJson(path: String): JSONObject {
-        val token = idToken ?: throw IllegalStateException("Google session expired")
         val connection = (URL(baseUrl + path).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = REQUEST_TIMEOUT_MS
             readTimeout = REQUEST_TIMEOUT_MS
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("Authorization", "Bearer $token")
             useCaches = false
         }
         try {
