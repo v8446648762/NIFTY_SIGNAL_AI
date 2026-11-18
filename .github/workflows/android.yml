@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches:
-      - feature/upstox-backend-hardening
+      - main
   push:
     branches:
       - main
@@ -12,6 +12,7 @@ on:
       - feature/advanced-ai-engine-v1
       - feature/testing-lab-advanced-ai-ui
       - feature/mgrow-android-live-feed
+      - feature/mgrow-live-ai-combined
 
 jobs:
   build:
