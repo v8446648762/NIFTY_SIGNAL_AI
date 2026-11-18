@@ -154,6 +154,9 @@ class MainActivity : FragmentActivity() {
     private val paperHistory = mutableListOf<String>()
     private var marketDataFeed: MarketDataFeed? = null
     private var latestSnapshot: MarketDataSnapshot? = null
+    private var intelligenceBiasView: TextView? = null
+    private var intelligenceFiltersView: TextView? = null
+    private var intelligenceStrengthView: TextView? = null
     private var currentPage = "Home"
     private var lastAiSignalKey: String? = null
     private lateinit var pageContent: LinearLayout
@@ -246,6 +249,8 @@ class MainActivity : FragmentActivity() {
 
     private fun clearLiveDashboard(message: String) {
         latestSnapshot = null
+        updateInsights(null)
+        updateRiskMeter(null)
         if (::indexPriceView.isInitialized) indexPriceView.text = "— — — — —"
         if (::indexHintView.isInitialized) indexHintView.text = message
         if (::changeValueView.isInitialized) changeValueView.text = "—"
@@ -338,6 +343,9 @@ class MainActivity : FragmentActivity() {
         dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
+        val intelligence = MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles, decision)
+        updateInsights(intelligence)
+        updateRiskMeter(intelligence?.riskInputs)
         recordAiSignal(decision, currentPrice, snapshot.receivedAtMillis)
         val biasText = when (decision.bias) {
             TradeBias.BUY_CE -> "BUY CE"
@@ -1449,19 +1457,34 @@ class MainActivity : FragmentActivity() {
 
     private fun buildInsights(): View {
         val box = card()
-        box.addView(text("MARKET BIAS", 10f, muted, true))
-        box.addView(text("Awaiting live market feed", 16f, white, true))
+        box.addView(text("MARKET BIAS • PRICE/VOLUME ANALYSIS", 10f, muted, true))
+        intelligenceBiasView = text("Awaiting validated live candles", 16f, white, true)
+        box.addView(intelligenceBiasView)
         addGap(box, 6)
-        box.addView(text("Volume confirmation • False-breakout filter • Trend strength", 11f, muted))
-        addGap(box, 8)
-        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        chips.addView(pill("SUPERTREND", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("MACD", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("ADX", muted))
-        box.addView(chips)
+        intelligenceFiltersView = text("Volume: —  •  False breakout: —", 11f, muted)
+        box.addView(intelligenceFiltersView)
+        addGap(box, 5)
+        intelligenceStrengthView = text("EMA trend strength: —  •  Price/volume bias: —", 11f, muted)
+        box.addView(intelligenceStrengthView)
+        addGap(box, 7)
+        box.addView(text("Uses validated 5-minute OHLCV candles. ADX/MACD/Supertrend are not represented as active unless separately calculated.", 10f, amber))
+        latestSnapshot?.let { snapshot ->
+            updateInsights(MarketIntelligenceEngine.evaluate(
+                snapshot.fiveMinuteCandles,
+                SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
+            ))
+        }
         return box
+    }
+
+    private fun updateInsights(result: MarketIntelligenceSnapshot?) {
+        intelligenceBiasView?.text = result?.marketBias ?: "Awaiting validated live candles"
+        intelligenceFiltersView?.text = result?.let {
+            "Volume: ${if (it.volumeConfirmed) "CONFIRMED" else "NOT CONFIRMED"}  •  False breakout: ${if (it.falseBreakout) "WARNING" else "NOT DETECTED"}"
+        } ?: "Volume: —  •  False breakout: —"
+        intelligenceStrengthView?.text = result?.let {
+            "EMA trend strength: ${it.trendStrengthLabel}  •  Price/volume bias: ${it.priceVolumeBias}"
+        } ?: "EMA trend strength: —  •  Price/volume bias: —"
     }
 
     private fun buildAlerts(): View {
@@ -1681,10 +1704,13 @@ class MainActivity : FragmentActivity() {
         box.addView(text("LOW 0–30  •  MODERATE 31–60  •  HIGH 61–100", 10f, muted, true))
         addGap(box, 6)
         box.addView(text(
-            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Sentiment 20%. Score updates only from the existing risk engine; missing or stale inputs show DATA UNAVAILABLE.",
+            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Price/volume sentiment proxy 20%. This is a technical proxy, not news sentiment or profit probability; missing inputs show DATA UNAVAILABLE.",
             10f, amber
         ))
-        updateRiskMeter(null)
+        updateRiskMeter(latestSnapshot?.let { snapshot ->
+            MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles,
+                SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles))?.riskInputs
+        })
         return box
     }
 
