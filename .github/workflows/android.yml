@@ -13,6 +13,7 @@ on:
       - feature/testing-lab-advanced-ai-ui
       - feature/mgrow-android-live-feed
       - feature/mgrow-live-ai-combined
+      - feature/mgrow-automated-live-feed
 
 jobs:
   build:
