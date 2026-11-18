@@ -11,6 +11,7 @@ on:
       - feature/live-candles-indicators-smart-ai
       - feature/mgrow-build157-upstox-integration
       - fix/ai-signal-market-intelligence-risk
+      - feature/mgrow-background-live-data
 
 jobs:
   build:
