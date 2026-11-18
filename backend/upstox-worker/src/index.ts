@@ -8,13 +8,15 @@ const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
 const CANDLE_CACHE_TTL_MS = 55_000;
+const CANDLE_CACHE_MAX_STALE_MS = 10 * 60_000;
+let fiveMinuteRetryAfter = 0;
 let candleCache: { body: Record<string, unknown>; cachedAt: number } | null = null;
 let candleFetchInFlight: Promise<Record<string, unknown>> | null = null;
 let oneMinuteRetryAfter = 0;
 const ONE_MINUTE_RETRY_COOLDOWN_MS = 5 * 60_000;
 
 class UpstreamHttpError extends Error {
-  constructor(readonly status: number, readonly interval: "1" | "5") {
+  constructor(readonly status: number, readonly interval: "1" | "5", readonly retryAfterSeconds: number, readonly detail: string | null) {
     super("Upstream HTTP request failed");
     this.name = "UpstreamHttpError";
   }
@@ -61,6 +63,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     if (candleCache && now - candleCache.cachedAt <= CANDLE_CACHE_TTL_MS) {
       return json({ ...candleCache.body, cache: "hit" });
     }
+    if (now < fiveMinuteRetryAfter) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((fiveMinuteRetryAfter - now) / 1000));
+      if (candleCache && now - candleCache.cachedAt <= CANDLE_CACHE_MAX_STALE_MS) {
+        return json({ ...candleCache.body, warnings: [...((candleCache.body.warnings as string[] | undefined) ?? []), "five_minute_temporarily_unavailable"], cache: "stale-if-error" });
+      }
+      return json({ error: "upstream_rate_limited", upstreamStatus: 429, interval: "5", retryAfterSeconds }, 429, { "retry-after": String(retryAfterSeconds) });
+    }
     try {
       if (!candleFetchInFlight) {
         candleFetchInFlight = (async () => {
@@ -99,7 +108,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         return json({ error: "upstream_timeout" }, 504);
       }
       if (error instanceof UpstreamHttpError) {
-        return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status, interval: error.interval }, 502);
+        if (error.interval === "5" && error.status === 429) {
+          fiveMinuteRetryAfter = Date.now() + error.retryAfterSeconds * 1000;
+          if (candleCache && Date.now() - candleCache.cachedAt <= CANDLE_CACHE_MAX_STALE_MS) {
+            return json({ ...candleCache.body, warnings: [...((candleCache.body.warnings as string[] | undefined) ?? []), "five_minute_temporarily_unavailable"], cache: "stale-if-error" });
+          }
+        }
+        const status = error.status === 429 ? 429 : 502;
+        return json({ error: error.status === 429 ? "upstream_rate_limited" : "upstream_candle_request_failed", upstreamStatus: error.status, interval: error.interval, retryAfterSeconds: error.retryAfterSeconds, ...(error.detail ? { upstreamDetail: error.detail } : {}) }, status, error.status === 429 ? { "retry-after": String(error.retryAfterSeconds) } : {});
       }
       if (error instanceof Error && error.message === "invalid_upstream_candle_payload") {
         return json({ error: "invalid_upstream_candle_payload" }, 502);
@@ -164,7 +180,20 @@ async function fetchIntradayCandles(
         signal: controller.signal,
       },
     );
-    if (!upstream.ok) throw new UpstreamHttpError(upstream.status, interval);
+    if (!upstream.ok) {
+      const retryHeader = Number.parseInt(upstream.headers.get("retry-after") ?? "", 10);
+      const retryAfterSeconds = Number.isFinite(retryHeader) ? Math.min(300, Math.max(1, retryHeader)) : 60;
+      const responseText = await upstream.text();
+      let detail: string | null = null;
+      try {
+        const parsed = JSON.parse(responseText) as Record<string, unknown>;
+        const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+        const first = errors[0] as Record<string, unknown> | undefined;
+        const candidate = first?.message ?? parsed.message ?? parsed.error;
+        if (typeof candidate === "string") detail = candidate.slice(0, 240);
+      } catch { /* Do not expose arbitrary upstream response bodies. */ }
+      throw new UpstreamHttpError(upstream.status, interval, retryAfterSeconds, detail);
+    }
     const payload: unknown = await upstream.json();
     return extractValidCandles(payload);
   } finally {
