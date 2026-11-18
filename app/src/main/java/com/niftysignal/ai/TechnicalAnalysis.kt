@@ -27,29 +27,55 @@ data class TechnicalSnapshot(
 )
 
 object TechnicalAnalysis {
-    private const val MIN_PRIMARY_CANDLES = 22
+    // Full signal confirmation remains deliberately stricter than displaying individual indicators.
+    private const val MIN_SIGNAL_CANDLES = 22
     private const val MIN_CONFIRM_CANDLES = 2
+    private const val MIN_LEVEL_CANDLES = 5
 
     fun analyze(
         candles5m: List<MarketCandle>,
         candles1m: List<MarketCandle>
     ): TechnicalSnapshot {
-        if (candles5m.size < MIN_PRIMARY_CANDLES || candles1m.size < MIN_CONFIRM_CANDLES) {
-            return waitForData("Insufficient completed candles: need at least 22 five-minute and 2 one-minute candles.")
-        }
-        if (!candles5m.all(::isValid) || !candles1m.all(::isValid) ||
+        if (candles5m.isEmpty() || candles1m.isEmpty() ||
+            !candles5m.all(::isValid) || !candles1m.all(::isValid) ||
             !isChronological(candles5m) || !isChronological(candles1m)
         ) {
-            return waitForData("Invalid or out-of-order OHLCV candle data.")
+            return waitForData("Invalid, empty, or out-of-order OHLCV candle data.")
         }
 
+        // Calculate each display metric as soon as its own history requirement is met.
+        // Do not hide EMA 9 / RSI 14 merely because the stricter signal history is incomplete.
         val closes5m = candles5m.map { it.close }
         val ema9 = ema(closes5m, 9)
         val ema21 = ema(closes5m, 21)
         val rsi14 = rsi(closes5m, 14)
         val vwap = sessionVwap(candles5m)
-        if (ema9 == null || ema21 == null || rsi14 == null) {
-            return waitForData("EMA / RSI indicator data is not ready.")
+        val recent = candles5m.takeLast(20)
+        val support = recent.minOfOrNull { it.low }.takeIf { candles5m.size >= MIN_LEVEL_CANDLES }
+        val resistance = recent.maxOfOrNull { it.high }.takeIf { candles5m.size >= MIN_LEVEL_CANDLES }
+
+        fun snapshot(bias: TradeBias, reason: String) = TechnicalSnapshot(
+            bias = bias,
+            reason = reason,
+            ema9 = ema9,
+            ema21 = ema21,
+            rsi14 = rsi14,
+            vwap = vwap,
+            support = support,
+            resistance = resistance
+        )
+
+        if (candles5m.size < MIN_SIGNAL_CANDLES || candles1m.size < MIN_CONFIRM_CANDLES ||
+            ema9 == null || ema21 == null || rsi14 == null
+        ) {
+            val missing = buildList {
+                if (ema9 == null) add("EMA 9 needs 9 completed 5m candles")
+                if (rsi14 == null) add("RSI 14 needs 15 completed 5m candles")
+                if (ema21 == null) add("EMA 21 needs 21 completed 5m candles")
+                if (candles5m.size < MIN_SIGNAL_CANDLES) add("signal confirmation needs 22 completed 5m candles")
+                if (candles1m.size < MIN_CONFIRM_CANDLES) add("signal confirmation needs 2 completed 1m candles")
+            }
+            return snapshot(TradeBias.WAIT, "Indicators are calculated independently. " + missing.joinToString("; ") + ".")
         }
 
         val last5 = candles5m.last()
@@ -87,17 +113,7 @@ object TechnicalAnalysis {
             else "Full 5m setup and 1m confirmation are not aligned."
         }
 
-        val recent = candles5m.takeLast(20)
-        return TechnicalSnapshot(
-            bias = bias,
-            reason = reason,
-            ema9 = ema9,
-            ema21 = ema21,
-            rsi14 = rsi14,
-            vwap = vwap,
-            support = recent.minOfOrNull { it.low },
-            resistance = recent.maxOfOrNull { it.high }
-        )
+        return snapshot(bias, reason)
     }
 
     fun ema(values: List<Double>, period: Int): Double? {
