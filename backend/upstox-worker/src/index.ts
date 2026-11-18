@@ -11,13 +11,28 @@ const CANDLE_CACHE_TTL_MS = 55_000;
 let candleCache: { body: Record<string, unknown>; cachedAt: number } | null = null;
 let candleFetchInFlight: Promise<Record<string, unknown>> | null = null;
 let oneMinuteRetryAfter = 0;
+let fiveMinuteRetryAfter = 0;
 const ONE_MINUTE_RETRY_COOLDOWN_MS = 5 * 60_000;
+const DEFAULT_UPSTREAM_429_COOLDOWN_SECONDS = 30;
 
 class UpstreamHttpError extends Error {
-  constructor(readonly status: number, readonly interval: "1" | "5") {
+  constructor(
+    readonly status: number,
+    readonly interval: "1" | "5",
+    readonly retryAfterSeconds: number | null = null,
+  ) {
     super("Upstream HTTP request failed");
     this.name = "UpstreamHttpError";
   }
+}
+
+function parseRetryAfterSeconds(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(300, Math.ceil(seconds));
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) return null;
+  return Math.min(300, Math.max(0, Math.ceil((date - Date.now()) / 1000)));
 }
 const MAX_FUTURE_SKEW_MS = 5_000;
 
@@ -61,11 +76,20 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     if (candleCache && now - candleCache.cachedAt <= CANDLE_CACHE_TTL_MS) {
       return json({ ...candleCache.body, cache: "hit" });
     }
+    if (now < fiveMinuteRetryAfter) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((fiveMinuteRetryAfter - now) / 1000));
+      return json(
+        { error: "upstream_rate_limited", upstreamStatus: 429, interval: "5", retryAfterSeconds },
+        429,
+        { "retry-after": String(retryAfterSeconds) },
+      );
+    }
     try {
       if (!candleFetchInFlight) {
         candleFetchInFlight = (async () => {
           // 5m is the primary chart feed. A 1m rate-limit must never block it.
           const fiveMinute = await fetchIntradayCandles("5", env.UPSTOX_ANALYTICS_TOKEN);
+          fiveMinuteRetryAfter = 0;
           if (!fiveMinute) throw new Error("invalid_upstream_candle_payload");
           let oneMinute: Awaited<ReturnType<typeof fetchIntradayCandles>> = null;
           let oneMinuteUnavailable = false;
@@ -99,6 +123,15 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         return json({ error: "upstream_timeout" }, 504);
       }
       if (error instanceof UpstreamHttpError) {
+        if (error.status === 429 && error.interval === "5") {
+          const retryAfterSeconds = error.retryAfterSeconds ?? DEFAULT_UPSTREAM_429_COOLDOWN_SECONDS;
+          fiveMinuteRetryAfter = Date.now() + retryAfterSeconds * 1000;
+          return json(
+            { error: "upstream_rate_limited", upstreamStatus: 429, interval: "5", retryAfterSeconds },
+            429,
+            { "retry-after": String(retryAfterSeconds) },
+          );
+        }
         return json({ error: "upstream_candle_request_failed", upstreamStatus: error.status, interval: error.interval }, 502);
       }
       if (error instanceof Error && error.message === "invalid_upstream_candle_payload") {
@@ -125,6 +158,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       },
     );
     if (!upstream.ok) {
+      if (upstream.status === 429) {
+        const retryAfterSeconds = parseRetryAfterSeconds(upstream.headers.get("retry-after")) ?? DEFAULT_UPSTREAM_429_COOLDOWN_SECONDS;
+        return json(
+          { error: "upstream_rate_limited", upstreamStatus: 429, retryAfterSeconds },
+          429,
+          { "retry-after": String(retryAfterSeconds) },
+        );
+      }
       return json({ error: "upstream_market_data_error", upstreamStatus: upstream.status }, 502);
     }
     const payload: unknown = await upstream.json();
@@ -164,7 +205,11 @@ async function fetchIntradayCandles(
         signal: controller.signal,
       },
     );
-    if (!upstream.ok) throw new UpstreamHttpError(upstream.status, interval);
+    if (!upstream.ok) throw new UpstreamHttpError(
+      upstream.status,
+      interval,
+      parseRetryAfterSeconds(upstream.headers.get("retry-after")),
+    );
     const payload: unknown = await upstream.json();
     return extractValidCandles(payload);
   } finally {
