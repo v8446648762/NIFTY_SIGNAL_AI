@@ -12,10 +12,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.widget.Switch
 import android.widget.Spinner
 import android.widget.ArrayAdapter
 import android.content.Intent
+import android.content.ComponentName
+import android.content.ServiceConnection
 import android.widget.Toast
 import android.graphics.Canvas
 import android.graphics.Color
@@ -49,8 +52,35 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private var marketFeedBound = false
+
+    private val marketFeedServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val serviceBinder = binder as? MarketDataForegroundService.LocalBinder ?: return
+            if (marketFeedBound && !isFinishing) {
+                attachMarketDataFeed(serviceBinder.getService())
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            detachMarketDataFeed()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val serviceIntent = Intent(this, MarketDataForegroundService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        marketFeedBound = bindService(serviceIntent, marketFeedServiceConnection, Context.BIND_AUTO_CREATE)
+    }
+
     override fun onStop() {
         if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
+        detachMarketDataFeed()
+        if (marketFeedBound) {
+            unbindService(marketFeedServiceConnection)
+            marketFeedBound = false
+        }
         super.onStop()
     }
 
@@ -600,8 +630,7 @@ class MainActivity : FragmentActivity() {
         setContentView(root)
         root.requestApplyInsets()
         showPage("Home")
-        // Live NIFTY candles are read through the Cloudflare Worker; no broker token is stored in the APK.
-        attachMarketDataFeed(UpstoxWorkerMarketDataFeed())
+        // The foreground service owns the read-only Cloudflare Worker feed across Activity lifecycles.
     }
 
     private fun showPage(page: String) {
@@ -1230,13 +1259,13 @@ class MainActivity : FragmentActivity() {
             setOnClickListener {
                 isEnabled = false
                 val feed = marketDataFeed
-                if (feed is UpstoxWorkerMarketDataFeed) {
+                if (feed is MarketDataForegroundService) {
                     feed.refreshNow {
                         runOnUiThread { isEnabled = true }
                     }
                 } else {
                     isEnabled = true
-                    updateFeedStatus(FeedConnectionState.OFFLINE, "Upstox feed is not attached")
+                    updateFeedStatus(FeedConnectionState.OFFLINE, "Background market service is not connected")
                 }
             }
         }
