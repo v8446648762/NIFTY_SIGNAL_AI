@@ -178,6 +178,11 @@ class MainActivity : FragmentActivity() {
     private lateinit var chartModeNoteView: TextView
     private lateinit var headerModePill: TextView
     private lateinit var workerConnectionDetailView: TextView
+    private var marketBiasView: TextView? = null
+    private var marketDetailView: TextView? = null
+    private var supertrendView: TextView? = null
+    private var macdView: TextView? = null
+    private var adxView: TextView? = null
 
     private val marketFeedListener = object : MarketDataFeed.Listener {
         override fun onStatusChanged(status: FeedConnectionState, message: String?) {
@@ -272,6 +277,8 @@ class MainActivity : FragmentActivity() {
             signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), amber, 30)
         }
         if (::signalReasonView.isInitialized) signalReasonView.text = message
+        updateMarketIntelligence(null)
+        updateRiskMeter(null)
         if (::signalTrendValueView.isInitialized) signalTrendValueView.text = "—"
         if (::signalSetupValueView.isInitialized) signalSetupValueView.text = "—"
         if (::signalConfirmValueView.isInitialized) signalConfirmValueView.text = "—"
@@ -314,9 +321,9 @@ class MainActivity : FragmentActivity() {
             return
         }
         if (snapshot.fiveMinuteCandles.isEmpty() ||
-            snapshot.oneMinuteCandles.isEmpty() ||
             !snapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
-            !snapshot.oneMinuteCandles.all(::isValidMarketCandle)
+            (snapshot.oneMinuteCandles.isNotEmpty() &&
+                !snapshot.oneMinuteCandles.all(::isValidMarketCandle))
         ) {
             updateFeedStatus(FeedConnectionState.ERROR, "Feed returned empty or invalid OHLCV candles.")
             return
@@ -355,6 +362,9 @@ class MainActivity : FragmentActivity() {
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
         if (!snapshot.isStale) recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
+        val intelligence = if (snapshot.isStale) null else MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles)
+        updateMarketIntelligence(intelligence)
+        updateRiskMeter(intelligence?.riskInputs)
         val displayedBias = if (snapshot.isStale) TradeBias.WAIT else decision.bias
         val biasText = when (displayedBias) {
             TradeBias.BUY_CE -> "BUY CE"
@@ -1449,18 +1459,42 @@ class MainActivity : FragmentActivity() {
     private fun buildInsights(): View {
         val box = card()
         box.addView(text("MARKET BIAS", 10f, muted, true))
-        box.addView(text("Awaiting live market feed", 16f, white, true))
+        marketBiasView = text("Awaiting validated 5-minute candles", 16f, white, true)
+        box.addView(marketBiasView)
         addGap(box, 6)
-        box.addView(text("Volume confirmation • False-breakout filter • Trend strength", 11f, muted))
+        marketDetailView = text("Volume confirmation • False-breakout filter • Trend strength", 11f, muted)
+        box.addView(marketDetailView)
         addGap(box, 8)
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        chips.addView(pill("SUPERTREND", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("MACD", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("ADX", muted))
+        fun metric(label: String, setter: (TextView) -> Unit) {
+            val value = pill("$label: —", muted)
+            setter(value)
+            chips.addView(value)
+        }
+        metric("SUPERTREND") { supertrendView = it }
+        chips.addView(View(this), LinearLayout.LayoutParams(dp(5), 1))
+        metric("MACD") { macdView = it }
+        chips.addView(View(this), LinearLayout.LayoutParams(dp(5), 1))
+        metric("ADX") { adxView = it }
         box.addView(chips)
         return box
+    }
+
+    private fun updateMarketIntelligence(result: MarketIntelligenceSnapshot?) {
+        marketBiasView?.text = result?.bias ?: "Waiting for fresh market data"
+        marketDetailView?.text = result?.let {
+            "Trend strength " + (it.adx?.let { value -> String.format(java.util.Locale.US, "%.1f", value) } ?: "N/A") +
+                " • Volume " + it.volumeStatus + " • Breakout " + it.breakoutStatus
+        } ?: "Market intelligence paused until fresh validated candles arrive."
+        supertrendView?.text = "SUPERTREND: " + (result?.supertrend ?: "N/A")
+        macdView?.text = "MACD: " + (result?.macd ?: "N/A")
+        adxView?.text = "ADX: " + (result?.adx?.let { value -> String.format(java.util.Locale.US, "%.1f", value) } ?: "N/A")
+        val tint = if (result == null) muted else when (result.bias) {
+            "BULLISH" -> green
+            "BEARISH" -> red
+            else -> amber
+        }
+        marketBiasView?.setTextColor(tint)
     }
 
     private fun buildAlerts(): View {
