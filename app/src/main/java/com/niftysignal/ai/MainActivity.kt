@@ -3,6 +3,13 @@ package com.niftysignal.ai
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.lifecycle.lifecycleScope
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.launch
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -38,19 +45,22 @@ import kotlin.math.min
 class MainActivity : FragmentActivity() {
     private var appUnlocked = false
     private var authenticationInProgress = false
+    private var googleSignInInProgress = false
+    // Google ID token is memory-only and authenticates the user to the Worker.
+    private var googleIdTokenForBackend: String? = null
 
     private fun isAppLockEnabled(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
 
     override fun onResume() {
         super.onResume()
-        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress) {
+        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress && !googleSignInInProgress) {
             authenticateAppLock()
         }
     }
 
     override fun onStop() {
-        if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
+        if (isAppLockEnabled() && !authenticationInProgress && !googleSignInInProgress) appUnlocked = false
         super.onStop()
     }
 
@@ -144,6 +154,9 @@ class MainActivity : FragmentActivity() {
     private val paperHistory = mutableListOf<String>()
     private var marketDataFeed: MarketDataFeed? = null
     private var latestSnapshot: MarketDataSnapshot? = null
+    private var intelligenceBiasView: TextView? = null
+    private var intelligenceFiltersView: TextView? = null
+    private var intelligenceStrengthView: TextView? = null
     private var currentPage = "Home"
     private var lastAiSignalKey: String? = null
     private lateinit var pageContent: LinearLayout
@@ -236,6 +249,8 @@ class MainActivity : FragmentActivity() {
 
     private fun clearLiveDashboard(message: String) {
         latestSnapshot = null
+        updateInsights(null)
+        updateRiskMeter(null)
         if (::indexPriceView.isInitialized) indexPriceView.text = "— — — — —"
         if (::indexHintView.isInitialized) indexHintView.text = message
         if (::changeValueView.isInitialized) changeValueView.text = "—"
@@ -305,12 +320,13 @@ class MainActivity : FragmentActivity() {
         updateFeedStatus(FeedConnectionState.LIVE, null)
 
         val latest = snapshot.fiveMinuteCandles.last()
-        indexPriceView.text = formatMarketValue(latest.close)
-        indexHintView.text = "Latest validated 5-minute NIFTY candle • Feed received just now"
+        val currentPrice = snapshot.lastPrice?.takeIf { it.isFinite() && it > 0.0 } ?: latest.close
+        indexPriceView.text = formatMarketValue(currentPrice)
+        indexHintView.text = "Live NIFTY quote • 1m/5m candles validated"
 
         val previousClose = snapshot.previousClose?.takeIf { it.isFinite() && it > 0.0 }
         if (previousClose != null) {
-            val change = latest.close - previousClose
+            val change = currentPrice - previousClose
             val percent = change / previousClose * 100.0
             changeValueView.text = String.format(java.util.Locale.US, "%+.2f (%.2f%%)", change, percent)
             changeValueView.setTextColor(if (change >= 0.0) green else red)
@@ -327,7 +343,10 @@ class MainActivity : FragmentActivity() {
         dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
-        recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
+        val intelligence = MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles, decision)
+        updateInsights(intelligence)
+        updateRiskMeter(intelligence?.riskInputs)
+        recordAiSignal(decision, currentPrice, snapshot.receivedAtMillis)
         val biasText = when (decision.bias) {
             TradeBias.BUY_CE -> "BUY CE"
             TradeBias.BUY_PE -> "BUY PE"
@@ -1092,6 +1111,52 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
+    private fun beginGoogleSignIn(statusView: TextView, signInButton: Button, clearButton: Button) {
+        val clientId = getString(R.string.google_web_client_id).trim()
+        if (clientId.isEmpty()) {
+            Toast.makeText(this, "Google Web Client ID is not configured.", Toast.LENGTH_LONG).show()
+            return
+        }
+        signInButton.isEnabled = false
+        googleSignInInProgress = true
+        lifecycleScope.launch {
+            try {
+                val option = GetSignInWithGoogleOption.Builder(clientId).build()
+                val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+                val result = CredentialManager.create(this@MainActivity)
+                    .getCredential(this@MainActivity, request)
+                val credential = result.credential
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                    googleIdTokenForBackend = idToken
+                    clearButton.isEnabled = true
+                    signInButton.text = "GOOGLE ACCOUNT CONNECTED"
+                    val workerUrl = getString(R.string.mgrow_worker_base_url).trim()
+                    if (workerUrl.startsWith("https://")) {
+                        attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, idToken))
+                        statusView.text = "Google signed in • Connecting to NIFTY live feed"
+                    } else {
+                        statusView.text = "Google signed in • Secure Worker URL not configured yet"
+                        updateFeedStatus(FeedConnectionState.OFFLINE, "Worker URL is not configured; live data is not connected.")
+                    }
+                } else {
+                    statusView.text = "Unsupported Google credential."
+                }
+            } catch (error: Exception) {
+                statusView.text = "Google sign-in failed (${error.javaClass.simpleName})."
+                Toast.makeText(this@MainActivity, statusView.text, Toast.LENGTH_LONG).show()
+            } finally {
+                googleSignInInProgress = false
+                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                    appUnlocked = false
+                }
+                signInButton.isEnabled = true
+            }
+        }
+    }
+
     private fun buildSettings(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
@@ -1109,6 +1174,36 @@ class MainActivity : FragmentActivity() {
             row.addView(text(subtitle, 11f, muted))
             return row
         }
+
+        section(root, "GOOGLE ACCOUNT")
+        val googleStatus = text(
+            if (googleIdTokenForBackend == null) "Not connected" else "Google signed in • session held in memory",
+            12f, muted
+        )
+        root.addView(googleStatus)
+        lateinit var clearGoogleSession: Button
+        val googleButton = Button(this).apply {
+            text = if (googleIdTokenForBackend == null) "CONTINUE WITH GOOGLE" else "GOOGLE ACCOUNT CONNECTED"
+            setOnClickListener { beginGoogleSignIn(googleStatus, this, clearGoogleSession) }
+        }
+        root.addView(googleButton)
+        clearGoogleSession = Button(this).apply {
+            text = "CLEAR GOOGLE SESSION"
+            isEnabled = googleIdTokenForBackend != null
+            setOnClickListener {
+                googleIdTokenForBackend = null
+                detachMarketDataFeed()
+                googleStatus.text = "Not connected"
+                googleButton.text = "CONTINUE WITH GOOGLE"
+                isEnabled = false
+            }
+        }
+        root.addView(clearGoogleSession)
+        root.addView(text(
+            "Read-only market data only. Broker token stays on the secure server; no order placement.",
+            10f, amber
+        ))
+        addGap(root, 12)
 
         val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
         root.addView(settingRow(
@@ -1362,19 +1457,34 @@ class MainActivity : FragmentActivity() {
 
     private fun buildInsights(): View {
         val box = card()
-        box.addView(text("MARKET BIAS", 10f, muted, true))
-        box.addView(text("Awaiting live market feed", 16f, white, true))
+        box.addView(text("MARKET BIAS • PRICE/VOLUME ANALYSIS", 10f, muted, true))
+        intelligenceBiasView = text("Awaiting validated live candles", 16f, white, true)
+        box.addView(intelligenceBiasView)
         addGap(box, 6)
-        box.addView(text("Volume confirmation • False-breakout filter • Trend strength", 11f, muted))
-        addGap(box, 8)
-        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        chips.addView(pill("SUPERTREND", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("MACD", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("ADX", muted))
-        box.addView(chips)
+        intelligenceFiltersView = text("Volume: —  •  False breakout: —", 11f, muted)
+        box.addView(intelligenceFiltersView)
+        addGap(box, 5)
+        intelligenceStrengthView = text("EMA trend strength: —  •  Price/volume bias: —", 11f, muted)
+        box.addView(intelligenceStrengthView)
+        addGap(box, 7)
+        box.addView(text("Uses validated 5-minute OHLCV candles. ADX/MACD/Supertrend are not represented as active unless separately calculated.", 10f, amber))
+        latestSnapshot?.let { snapshot ->
+            updateInsights(MarketIntelligenceEngine.evaluate(
+                snapshot.fiveMinuteCandles,
+                SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
+            ))
+        }
         return box
+    }
+
+    private fun updateInsights(result: MarketIntelligenceSnapshot?) {
+        intelligenceBiasView?.text = result?.marketBias ?: "Awaiting validated live candles"
+        intelligenceFiltersView?.text = result?.let {
+            "Volume: ${if (it.volumeConfirmed) "CONFIRMED" else "NOT CONFIRMED"}  •  False breakout: ${if (it.falseBreakout) "WARNING" else "NOT DETECTED"}"
+        } ?: "Volume: —  •  False breakout: —"
+        intelligenceStrengthView?.text = result?.let {
+            "EMA trend strength: ${it.trendStrengthLabel}  •  Price/volume bias: ${it.priceVolumeBias}"
+        } ?: "EMA trend strength: —  •  Price/volume bias: —"
     }
 
     private fun buildAlerts(): View {
@@ -1594,10 +1704,13 @@ class MainActivity : FragmentActivity() {
         box.addView(text("LOW 0–30  •  MODERATE 31–60  •  HIGH 61–100", 10f, muted, true))
         addGap(box, 6)
         box.addView(text(
-            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Sentiment 20%. Score updates only from the existing risk engine; missing or stale inputs show DATA UNAVAILABLE.",
+            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Price/volume sentiment proxy 20%. This is a technical proxy, not news sentiment or profit probability; missing inputs show DATA UNAVAILABLE.",
             10f, amber
         ))
-        updateRiskMeter(null)
+        updateRiskMeter(latestSnapshot?.let { snapshot ->
+            MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles,
+                SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles))?.riskInputs
+        })
         return box
     }
 
