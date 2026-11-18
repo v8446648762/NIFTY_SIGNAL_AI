@@ -3,13 +3,6 @@ package com.niftysignal.ai
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.lifecycle.lifecycleScope
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import kotlinx.coroutines.launch
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -45,16 +38,13 @@ import kotlin.math.min
 class MainActivity : FragmentActivity() {
     private var appUnlocked = false
     private var authenticationInProgress = false
-    private var googleSignInInProgress = false
-    // Google ID token is memory-only and authenticates the user to the Worker.
-    private var googleIdTokenForBackend: String? = null
 
     private fun isAppLockEnabled(): Boolean =
         getSharedPreferences("mgrow_settings", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
 
     override fun onResume() {
         super.onResume()
-        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress && !googleSignInInProgress) {
+        if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress) {
             authenticateAppLock()
         }
     }
@@ -1112,44 +1102,14 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
-    // Reuse an already-authorized Google account silently for the protected Worker.
-    // No interactive Google sign-in screen is launched.
+    // Connect directly to the fixed, read-only NIFTY Worker; broker credentials stay server-side.
     private fun connectLiveFeedAutomatically() {
-        val clientId = getString(R.string.google_web_client_id).trim()
         val workerUrl = getString(R.string.mgrow_worker_base_url).trim()
-        if (clientId.isEmpty() || !workerUrl.startsWith("https://")) {
+        if (!workerUrl.startsWith("https://")) {
             updateFeedStatus(FeedConnectionState.ERROR, "Secure live-data configuration is unavailable.")
             return
         }
-        googleSignInInProgress = true
-        lifecycleScope.launch {
-            try {
-                val option = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(true)
-                    .setServerClientId(clientId)
-                    .setAutoSelectEnabled(true)
-                    .build()
-                val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-                val result = CredentialManager.create(this@MainActivity)
-                    .getCredential(this@MainActivity, request)
-                val credential = result.credential
-                if (credential is CustomCredential &&
-                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-                ) {
-                    val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                    googleIdTokenForBackend = idToken
-                    attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, idToken))
-                } else {
-                    updateFeedStatus(FeedConnectionState.ERROR, "No reusable secure session was returned.")
-                }
-            } catch (error: Exception) {
-                // Never fall back to an interactive Google sign-in prompt.
-                updateFeedStatus(FeedConnectionState.OFFLINE,
-                    "Automatic secure session unavailable (" + error.javaClass.simpleName + ").")
-            } finally {
-                googleSignInInProgress = false
-            }
-        }
+        attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl))
     }
 
     private fun buildSettings(): View {
