@@ -1617,7 +1617,7 @@ class MainActivity : FragmentActivity() {
         box.addView(text("LOW 0–30  •  MODERATE 31–60  •  HIGH 61–100", 10f, muted, true))
         addGap(box, 6)
         box.addView(text(
-            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Sentiment 20%. Score updates only from the existing risk engine; missing or stale inputs show DATA UNAVAILABLE.",
+            "Risk components: Indicators 30% • Trend 25% • Price Action 25% • Price/volume sentiment proxy 20%. This is a technical proxy, not news sentiment or profit probability; missing inputs show DATA UNAVAILABLE.",
             10f, amber
         ))
         updateRiskMeter(latestSnapshot?.let { snapshot ->
