@@ -7,7 +7,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.lifecycleScope
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 import android.app.AlertDialog
@@ -555,6 +555,7 @@ class MainActivity : FragmentActivity() {
         setContentView(root)
         root.requestApplyInsets()
         showPage("Home")
+        connectLiveFeedAutomatically()
     }
 
     private fun showPage(page: String) {
@@ -1111,17 +1112,23 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
-    private fun beginGoogleSignIn(statusView: TextView, signInButton: Button, clearButton: Button) {
+    // Reuse an already-authorized Google account silently for the protected Worker.
+    // No interactive Google sign-in screen is launched.
+    private fun connectLiveFeedAutomatically() {
         val clientId = getString(R.string.google_web_client_id).trim()
-        if (clientId.isEmpty()) {
-            Toast.makeText(this, "Google Web Client ID is not configured.", Toast.LENGTH_LONG).show()
+        val workerUrl = getString(R.string.mgrow_worker_base_url).trim()
+        if (clientId.isEmpty() || !workerUrl.startsWith("https://")) {
+            updateFeedStatus(FeedConnectionState.ERROR, "Secure live-data configuration is unavailable.")
             return
         }
-        signInButton.isEnabled = false
         googleSignInInProgress = true
         lifecycleScope.launch {
             try {
-                val option = GetSignInWithGoogleOption.Builder(clientId).build()
+                val option = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(true)
+                    .setServerClientId(clientId)
+                    .setAutoSelectEnabled(true)
+                    .build()
                 val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
                 val result = CredentialManager.create(this@MainActivity)
                     .getCredential(this@MainActivity, request)
@@ -1131,28 +1138,16 @@ class MainActivity : FragmentActivity() {
                 ) {
                     val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                     googleIdTokenForBackend = idToken
-                    clearButton.isEnabled = true
-                    signInButton.text = "GOOGLE ACCOUNT CONNECTED"
-                    val workerUrl = getString(R.string.mgrow_worker_base_url).trim()
-                    if (workerUrl.startsWith("https://")) {
-                        attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, idToken))
-                        statusView.text = "Google signed in • Connecting to NIFTY live feed"
-                    } else {
-                        statusView.text = "Google signed in • Secure Worker URL not configured yet"
-                        updateFeedStatus(FeedConnectionState.OFFLINE, "Worker URL is not configured; live data is not connected.")
-                    }
+                    attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl, idToken))
                 } else {
-                    statusView.text = "Unsupported Google credential."
+                    updateFeedStatus(FeedConnectionState.ERROR, "No reusable secure session was returned.")
                 }
             } catch (error: Exception) {
-                statusView.text = "Google sign-in failed (${error.javaClass.simpleName})."
-                Toast.makeText(this@MainActivity, statusView.text, Toast.LENGTH_LONG).show()
+                // Never fall back to an interactive Google sign-in prompt.
+                updateFeedStatus(FeedConnectionState.OFFLINE,
+                    "Automatic secure session unavailable (" + error.javaClass.simpleName + ").")
             } finally {
                 googleSignInInProgress = false
-                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-                    appUnlocked = false
-                }
-                signInButton.isEnabled = true
             }
         }
     }
@@ -1175,30 +1170,6 @@ class MainActivity : FragmentActivity() {
             return row
         }
 
-        section(root, "GOOGLE ACCOUNT")
-        val googleStatus = text(
-            if (googleIdTokenForBackend == null) "Not connected" else "Google signed in • session held in memory",
-            12f, muted
-        )
-        root.addView(googleStatus)
-        lateinit var clearGoogleSession: Button
-        val googleButton = Button(this).apply {
-            text = if (googleIdTokenForBackend == null) "CONTINUE WITH GOOGLE" else "GOOGLE ACCOUNT CONNECTED"
-            setOnClickListener { beginGoogleSignIn(googleStatus, this, clearGoogleSession) }
-        }
-        root.addView(googleButton)
-        clearGoogleSession = Button(this).apply {
-            text = "CLEAR GOOGLE SESSION"
-            isEnabled = googleIdTokenForBackend != null
-            setOnClickListener {
-                googleIdTokenForBackend = null
-                detachMarketDataFeed()
-                googleStatus.text = "Not connected"
-                googleButton.text = "CONTINUE WITH GOOGLE"
-                isEnabled = false
-            }
-        }
-        root.addView(clearGoogleSession)
         root.addView(text(
             "Read-only market data only. Broker token stays on the secure server; no order placement.",
             10f, amber
