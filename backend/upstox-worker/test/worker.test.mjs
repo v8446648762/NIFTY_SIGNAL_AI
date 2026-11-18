@@ -11,7 +11,11 @@ const configuredEnv = {
   UPSTOX_ANALYTICS_TOKEN: "server-only-test-token",
 };
 const originalFetch = globalThis.fetch;
-test.afterEach(() => { globalThis.fetch = originalFetch; });
+const originalDateNow = Date.now;
+test.afterEach(() => {
+  globalThis.fetch = originalFetch;
+  Date.now = originalDateNow;
+});
 
 test("GET /health reports worker status without claiming broker connection", async () => {
   const response = await handleRequest(new Request("https://worker.example/health"), emptyEnv);
@@ -95,4 +99,35 @@ test("5m candles remain available when the optional 1m request is rate limited",
   assert.deepEqual(body.warnings, ["one_minute_temporarily_unavailable"]);
   assert.match(calls[0], /minutes\/5$/);
   assert.match(calls[1], /minutes\/1$/);
+});
+
+
+test("5m upstream 429 is surfaced with Retry-After and suppresses repeated broker calls", async () => {
+  Date.now = () => originalDateNow() + 60_000;
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => {
+    upstreamCalls += 1;
+    return new Response(JSON.stringify({ status: "error" }), {
+      status: 429,
+      headers: { "retry-after": "12" },
+    });
+  };
+  const request = () => new Request("https://worker.example/v1/nifty/candles", {
+    headers: { "CF-Connecting-IP": "192.0.2.45" },
+  });
+
+  const first = await handleRequest(request(), configuredEnv);
+  assert.equal(first.status, 429);
+  assert.equal(first.headers.get("retry-after"), "12");
+  assert.deepEqual(await first.json(), {
+    error: "upstream_rate_limited",
+    upstreamStatus: 429,
+    interval: "5",
+    retryAfterSeconds: 12,
+  });
+
+  const second = await handleRequest(request(), configuredEnv);
+  assert.equal(second.status, 429);
+  assert.equal(second.headers.get("retry-after"), "12");
+  assert.equal(upstreamCalls, 1);
 });
