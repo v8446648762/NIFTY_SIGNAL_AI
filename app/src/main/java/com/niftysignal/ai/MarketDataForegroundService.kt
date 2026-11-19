@@ -5,6 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder
@@ -73,6 +76,130 @@ class MarketDataForegroundService : Service(), MarketDataFeed, MarketDataFeed.Li
         latestMessage = message
         updateForegroundNotification(status, message)
         listeners.forEach { it.onStatusChanged(status, message) }
+    }
+
+    private fun isWithinNiftyMarketHours(nowMillis: Long = System.currentTimeMillis()): Boolean {
+        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
+        calendar.timeInMillis = nowMillis
+        val day = calendar.get(java.util.Calendar.DAY_OF_WEEK)
+        val minuteOfDay = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+            calendar.get(java.util.Calendar.MINUTE)
+        return day != java.util.Calendar.SATURDAY &&
+            day != java.util.Calendar.SUNDAY &&
+            minuteOfDay >= (9 * 60 + 15) &&
+            minuteOfDay < (15 * 60 + 30)
+    }
+
+    private fun dispatchMarketAlerts(snapshot: MarketDataSnapshot) {
+        val ageMillis = System.currentTimeMillis() - snapshot.receivedAtMillis
+        if (snapshot.isStale || ageMillis < -5000L || ageMillis > 90000L ||
+            !isWithinNiftyMarketHours()
+        ) return
+
+        val permissionGranted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        if (!permissionGranted) return
+
+        val prefs = getSharedPreferences("mgrow_alerts", MODE_PRIVATE)
+        if (!prefs.getBoolean("enabled", false)) return
+        val five = snapshot.fiveMinuteCandles
+        if (five.size < 22) return
+
+        val latest5 = five.last()
+        val previous5 = five[five.lastIndex - 1]
+        val closes = five.map { it.close }
+        val currentVwap = TechnicalAnalysis.sessionVwap(five)
+        val previousVwap = TechnicalAnalysis.sessionVwap(five.dropLast(1))
+        val currentEma9 = TechnicalAnalysis.ema(closes, 9)
+        val currentEma21 = TechnicalAnalysis.ema(closes, 21)
+        val previousEma9 = TechnicalAnalysis.ema(closes.dropLast(1), 9)
+        val previousEma21 = TechnicalAnalysis.ema(closes.dropLast(1), 21)
+        val decision = SignalEngine.evaluate(five, snapshot.oneMinuteCandles)
+
+        fun sendOnce(category: String, eventKey: String, title: String, message: String, id: Int) {
+            if (!prefs.getBoolean(category, false)) return
+            val preferenceKey = "last_alert_${category}"
+            if (prefs.getString(preferenceKey, null) == eventKey) return
+            AlertNotifications.show(this, title, message, id)
+            prefs.edit().putString(preferenceKey, eventKey).apply()
+        }
+
+        val biasLabel = when (decision.bias) {
+            TradeBias.BUY_CE -> "BUY CE"
+            TradeBias.BUY_PE -> "BUY PE"
+            TradeBias.WAIT -> "WAIT"
+        }
+        if (decision.confirmed && decision.bias != TradeBias.WAIT) {
+            sendOnce(
+                "setup", "${latest5.timestampMillis}|${decision.bias.name}",
+                "MGrow • ${biasLabel} setup",
+                "5M setup and 1M confirmation detected near NIFTY ${String.format(java.util.Locale.US, "%.2f", latest5.close)}. Review the chart before acting.",
+                9201
+            )
+        }
+
+        if (currentVwap != null && previousVwap != null) {
+            val crossedUp = previous5.close <= previousVwap && latest5.close > currentVwap
+            val crossedDown = previous5.close >= previousVwap && latest5.close < currentVwap
+            if (crossedUp || crossedDown) {
+                val direction = if (crossedUp) "above" else "below"
+                sendOnce(
+                    "vwap", "${latest5.timestampMillis}|${if (crossedUp) "UP" else "DOWN"}",
+                    "MGrow • VWAP breakout",
+                    "NIFTY 5M candle crossed ${direction} VWAP near ${String.format(java.util.Locale.US, "%.2f", latest5.close)}.",
+                    9202
+                )
+            }
+        }
+
+        if (currentEma9 != null && currentEma21 != null &&
+            previousEma9 != null && previousEma21 != null
+        ) {
+            val crossedUp = previousEma9 <= previousEma21 && currentEma9 > currentEma21
+            val crossedDown = previousEma9 >= previousEma21 && currentEma9 < currentEma21
+            if (crossedUp || crossedDown) {
+                val direction = if (crossedUp) "bullish" else "bearish"
+                sendOnce(
+                    "ema", "${latest5.timestampMillis}|${if (crossedUp) "UP" else "DOWN"}",
+                    "MGrow • EMA 9/21 crossover",
+                    "${direction.replaceFirstChar { it.uppercase() }} EMA 9/21 crossover on NIFTY 5M.",
+                    9203
+                )
+            }
+        }
+
+        val previousBias = prefs.getString("last_observed_confirmed_bias", null)
+        if (decision.confirmed && decision.bias != TradeBias.WAIT) {
+            if (previousBias != null && previousBias != decision.bias.name) {
+                sendOnce(
+                    "reversal", "${latest5.timestampMillis}|${decision.bias.name}",
+                    "MGrow • Trend reversal",
+                    "Confirmed signal changed from ${previousBias} to ${decision.bias.name}. Check the live chart.",
+                    9204
+                )
+            }
+            prefs.edit().putString("last_observed_confirmed_bias", decision.bias.name).apply()
+        }
+
+        if (decision.confirmed && snapshot.oneMinuteCandles.size >= 2) {
+            val latest1 = snapshot.oneMinuteCandles.last()
+            val retestConfirmed = when (decision.bias) {
+                TradeBias.BUY_CE -> latest1.low <= previous5.high * 1.0005 &&
+                    latest1.close > previous5.high
+                TradeBias.BUY_PE -> latest1.high >= previous5.low * 0.9995 &&
+                    latest1.close < previous5.low
+                TradeBias.WAIT -> false
+            }
+            if (retestConfirmed) {
+                sendOnce(
+                    "retest", "${latest1.timestampMillis}|${decision.bias.name}",
+                    "MGrow • 1M retest confirmation",
+                    "${decision.bias.name} retest/rejection condition detected near NIFTY ${String.format(java.util.Locale.US, "%.2f", latest1.close)}.",
+                    9205
+                )
+            }
+        }
     }
 
     override fun onSnapshot(snapshot: MarketDataSnapshot) {
