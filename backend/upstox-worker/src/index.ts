@@ -298,9 +298,9 @@ export function extractOptionChain(payload: unknown): Array<Record<string, unkno
       const sideRow = value as Record<string, unknown>;
       const market = sideRow.market_data && typeof sideRow.market_data === "object" ? sideRow.market_data as Record<string, unknown> : {};
       const greeks = sideRow.option_greeks && typeof sideRow.option_greeks === "object" ? sideRow.option_greeks as Record<string, unknown> : {};
-      return { instrumentKey: sideRow.instrument_key ?? null, ltp: market.ltp ?? null, volume: market.volume ?? null, oi: market.oi ?? null, closePrice: market.close_price ?? null, bidPrice: market.bid_price ?? null, bidQuantity: market.bid_qty ?? null, askPrice: market.ask_price ?? null, askQuantity: market.ask_qty ?? null, iv: greeks.iv ?? null, delta: greeks.delta ?? null, gamma: greeks.gamma ?? null, theta: greeks.theta ?? null, vega: greeks.vega ?? null };
+      return { instrumentKey: sideRow.instrument_key ?? null, ltp: market.ltp ?? null, volume: market.volume ?? null, oi: market.oi ?? null, previousOi: market.prev_oi ?? null, changeOi: typeof market.oi === "number" && typeof market.prev_oi === "number" ? market.oi - market.prev_oi : null, closePrice: market.close_price ?? null, bidPrice: market.bid_price ?? null, bidQuantity: market.bid_qty ?? null, askPrice: market.ask_price ?? null, askQuantity: market.ask_qty ?? null, iv: greeks.iv ?? null, delta: greeks.delta ?? null, gamma: greeks.gamma ?? null, theta: greeks.theta ?? null, vega: greeks.vega ?? null };
     };
-    rows.push({ strikePrice: row.strike_price, call: side(row.call_options), put: side(row.put_options), underlyingSpotPrice: row.underlying_spot_price ?? null });
+    rows.push({ strikePrice: row.strike_price, call: side(row.call_options), put: side(row.put_options), underlyingSpotPrice: row.underlying_spot_price ?? null, pcr: row.pcr ?? null, expiry: row.expiry ?? null });
   }
   rows.sort((a, b) => Number(a.strikePrice) - Number(b.strikePrice));
   return rows;
