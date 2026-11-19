@@ -48,7 +48,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
-  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && url.pathname !== "/v1/nifty/option-chain") return json({ error: "not_found" }, 404);
+  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && url.pathname !== "/v1/nifty/option-chain" && url.pathname !== "/v1/nifty/option-expiries") return json({ error: "not_found" }, 404);
   if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "upstox_token_not_configured" }, 503);
   }
@@ -58,6 +58,22 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const rateLimit = await env.QUOTE_LIMITER.limit({ key: `nifty-readonly:${clientIp}` });
     if (!rateLimit.success) return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
+
+  if (url.pathname === "/v1/nifty/option-expiries") {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    try {
+      const upstreamUrl = `${UPSTOX_V2_BASE}/option/contract?instrument_key=${encodeURIComponent(NIFTY_50_KEY)}`;
+      const upstream = await fetch(upstreamUrl, { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${env.UPSTOX_ANALYTICS_TOKEN}` }, signal: controller.signal });
+      if (!upstream.ok) return json({ error: upstream.status === 429 ? "upstream_rate_limited" : "upstream_option_expiries_error", upstreamStatus: upstream.status }, upstream.status === 429 ? 429 : 502);
+      const payload: unknown = await upstream.json();
+      const expiries = extractOptionExpiries(payload);
+      if (!expiries) return json({ error: "invalid_upstream_option_expiries" }, 502);
+      return json({ provider: "upstox", instrumentKey: NIFTY_50_KEY, receivedAt: new Date().toISOString(), data: expiries });
+    } catch (error) {
+      return json({ error: error instanceof Error && error.name === "AbortError" ? "upstream_timeout" : "upstream_option_expiries_failed" }, error instanceof Error && error.name === "AbortError" ? 504 : 502);
+    } finally { clearTimeout(timeout); }
+  }
 
   if (url.pathname === "/v1/nifty/option-chain") {
     const expiryDate = url.searchParams.get("expiry_date") ?? "";
@@ -288,4 +304,20 @@ export function extractOptionChain(payload: unknown): Array<Record<string, unkno
   }
   rows.sort((a, b) => Number(a.strikePrice) - Number(b.strikePrice));
   return rows;
+}
+
+/** Returns distinct, validated NIFTY option expiry dates from Upstox contracts. */
+export function extractOptionExpiries(payload: unknown): string[] | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  if (root.status !== "success" || !Array.isArray(root.data)) return null;
+  const dates = new Set<string>();
+  for (const item of root.data) {
+    if (!item || typeof item !== "object") return null;
+    const expiry = (item as Record<string, unknown>).expiry;
+    if (typeof expiry !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(expiry)) continue;
+    const parsed = Date.parse(`${expiry}T00:00:00Z`);
+    if (Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === expiry) dates.add(expiry);
+  }
+  return [...dates].sort();
 }
