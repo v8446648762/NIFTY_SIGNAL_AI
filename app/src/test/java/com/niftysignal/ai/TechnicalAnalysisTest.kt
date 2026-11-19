@@ -36,4 +36,17 @@ class TechnicalAnalysisTest {
         assertEquals(TradeBias.WAIT, result.bias)
         assertTrue(result.reason.contains("Invalid"))
     }
+    @Test fun fiveMinuteIndicatorsRemainAvailableWithoutOneMinuteConfirmation() {
+        val candles = (1..40).map { index ->
+            val close = 22000.0 + index * 2.0
+            MarketCandle(index * 300_000L, close - 1.0, close + 1.0, close - 2.0, close, 0.0)
+        }
+        val result = TechnicalAnalysis.analyze(candles, emptyList())
+        assertNotNull(result.ema9)
+        assertNotNull(result.ema21)
+        assertNotNull(result.rsi14)
+        assertEquals(TradeBias.WAIT, result.bias)
+        assertTrue(result.reason.contains("1m"))
+    }
+
 }

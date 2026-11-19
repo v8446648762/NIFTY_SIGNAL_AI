@@ -12,10 +12,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.widget.Switch
 import android.widget.Spinner
 import android.widget.ArrayAdapter
 import android.content.Intent
+import android.content.ComponentName
+import android.content.ServiceConnection
 import android.widget.Toast
 import android.graphics.Canvas
 import android.graphics.Color
@@ -49,8 +52,35 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private var marketFeedBound = false
+
+    private val marketFeedServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val serviceBinder = binder as? MarketDataForegroundService.LocalBinder ?: return
+            if (marketFeedBound && !isFinishing) {
+                attachMarketDataFeed(serviceBinder.getService())
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            detachMarketDataFeed()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val serviceIntent = Intent(this, MarketDataForegroundService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
+        marketFeedBound = bindService(serviceIntent, marketFeedServiceConnection, Context.BIND_AUTO_CREATE)
+    }
+
     override fun onStop() {
         if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
+        detachMarketDataFeed()
+        if (marketFeedBound) {
+            unbindService(marketFeedServiceConnection)
+            marketFeedBound = false
+        }
         super.onStop()
     }
 
@@ -176,6 +206,13 @@ class MainActivity : FragmentActivity() {
     private lateinit var resistanceValueView: TextView
     private lateinit var chartModePill: TextView
     private lateinit var chartModeNoteView: TextView
+    private lateinit var headerModePill: TextView
+    private lateinit var workerConnectionDetailView: TextView
+    private var marketBiasView: TextView? = null
+    private var marketDetailView: TextView? = null
+    private var supertrendView: TextView? = null
+    private var macdView: TextView? = null
+    private var adxView: TextView? = null
 
     private val marketFeedListener = object : MarketDataFeed.Listener {
         override fun onStatusChanged(status: FeedConnectionState, message: String?) {
@@ -189,8 +226,8 @@ class MainActivity : FragmentActivity() {
 
 
     /**
-     * Future Upstox integration point. The adapter supplies candles through
-     * MarketDataFeed; the dashboard itself never handles broker orders or secrets.
+     * Upstox market-data adapter. The dashboard consumes candles through
+     * MarketDataFeed and never handles broker orders or broker secrets.
      */
     fun attachMarketDataFeed(feed: MarketDataFeed) {
         if (marketDataFeed === feed) return
@@ -213,24 +250,43 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun updateFeedStatus(status: FeedConnectionState, message: String? = null) {
+        val color = when (status) {
+            FeedConnectionState.LIVE -> green
+            FeedConnectionState.CONNECTING -> cyan
+            FeedConnectionState.STALE, FeedConnectionState.ERROR -> red
+            FeedConnectionState.OFFLINE -> amber
+        }
         if (::feedStatusView.isInitialized) {
-            val color = when (status) {
-                FeedConnectionState.LIVE -> green
-                FeedConnectionState.CONNECTING -> cyan
-                FeedConnectionState.STALE, FeedConnectionState.ERROR -> red
-                FeedConnectionState.OFFLINE -> amber
-            }
             feedStatusView.text = "● FEED " + status.name
             feedStatusView.setTextColor(color)
             feedStatusView.background = rounded(Color.argb(190, 41, 38, 66), color, 30)
         }
+        if (::workerConnectionDetailView.isInitialized) {
+            workerConnectionDetailView.text = when (status) {
+                FeedConnectionState.LIVE -> "Upstox Worker • HTTPS • Live candles received"
+                FeedConnectionState.STALE -> "Upstox Worker • Connected, but latest candles are stale"
+                FeedConnectionState.CONNECTING -> "Upstox Worker • Checking secure connection…"
+                FeedConnectionState.ERROR -> "Upstox Worker • " + (message ?: "Connection error")
+                FeedConnectionState.OFFLINE -> "Upstox Worker • Offline"
+            }
+            workerConnectionDetailView.setTextColor(color)
+        }
+        if (::headerModePill.isInitialized) {
+            headerModePill.text = when (status) {
+                FeedConnectionState.LIVE -> "● LIVE DATA"
+                FeedConnectionState.STALE -> "● STALE DATA"
+                FeedConnectionState.CONNECTING -> "● CONNECTING"
+                FeedConnectionState.ERROR -> "● FEED ERROR"
+                FeedConnectionState.OFFLINE -> "● OFFLINE"
+            }
+            headerModePill.setTextColor(color)
+            headerModePill.background = rounded(Color.argb(190, 41, 38, 66), color, 30)
+        }
         if (status == FeedConnectionState.OFFLINE ||
-            status == FeedConnectionState.STALE ||
-            status == FeedConnectionState.ERROR
+            status == FeedConnectionState.ERROR ||
+            status == FeedConnectionState.CONNECTING
         ) {
             clearLiveDashboard(message ?: "Live market data is unavailable.")
-        } else if (status == FeedConnectionState.CONNECTING) {
-            clearLiveDashboard(message ?: "Connecting to market data...")
         }
     }
 
@@ -251,6 +307,8 @@ class MainActivity : FragmentActivity() {
             signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), amber, 30)
         }
         if (::signalReasonView.isInitialized) signalReasonView.text = message
+        updateMarketIntelligence(null)
+        updateRiskMeter(null)
         if (::signalTrendValueView.isInitialized) signalTrendValueView.text = "—"
         if (::signalSetupValueView.isInitialized) signalSetupValueView.text = "—"
         if (::signalConfirmValueView.isInitialized) signalConfirmValueView.text = "—"
@@ -293,82 +351,118 @@ class MainActivity : FragmentActivity() {
             return
         }
         if (snapshot.fiveMinuteCandles.isEmpty() ||
-            snapshot.oneMinuteCandles.isEmpty() ||
             !snapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
-            !snapshot.oneMinuteCandles.all(::isValidMarketCandle)
+            (snapshot.oneMinuteCandles.isNotEmpty() &&
+                !snapshot.oneMinuteCandles.all(::isValidMarketCandle))
         ) {
             updateFeedStatus(FeedConnectionState.ERROR, "Feed returned empty or invalid OHLCV candles.")
             return
         }
 
         latestSnapshot = snapshot
-        updateFeedStatus(FeedConnectionState.LIVE, null)
+        updateFeedStatus(
+            if (snapshot.isStale) FeedConnectionState.STALE else FeedConnectionState.LIVE,
+            snapshot.staleReason
+        )
 
         val latest = snapshot.fiveMinuteCandles.last()
-        indexPriceView.text = formatMarketValue(latest.close)
-        indexHintView.text = "Latest validated 5-minute NIFTY candle • Feed received just now"
+        if (::indexPriceView.isInitialized) indexPriceView.text = formatMarketValue(latest.close)
+        if (::indexHintView.isInitialized) indexHintView.text =
+            "Latest validated 5-minute NIFTY candle • Feed received just now"
 
         val previousClose = snapshot.previousClose?.takeIf { it.isFinite() && it > 0.0 }
-        if (previousClose != null) {
-            val change = latest.close - previousClose
-            val percent = change / previousClose * 100.0
-            changeValueView.text = String.format(java.util.Locale.US, "%+.2f (%.2f%%)", change, percent)
-            changeValueView.setTextColor(if (change >= 0.0) green else red)
-        } else {
-            changeValueView.text = "—"
-            changeValueView.setTextColor(muted)
+        if (::changeValueView.isInitialized) {
+            if (previousClose != null) {
+                val change = latest.close - previousClose
+                val percent = change / previousClose * 100.0
+                changeValueView.text = String.format(java.util.Locale.US, "%+.2f (%.2f%%)", change, percent)
+                changeValueView.setTextColor(if (change >= 0.0) green else red)
+            } else {
+                changeValueView.text = "—"
+                changeValueView.setTextColor(muted)
+            }
         }
 
         val dayHigh = snapshot.dayHigh?.takeIf { it.isFinite() && it > 0.0 }
             ?: snapshot.fiveMinuteCandles.maxOfOrNull { it.high }
         val dayLow = snapshot.dayLow?.takeIf { it.isFinite() && it > 0.0 }
             ?: snapshot.fiveMinuteCandles.minOfOrNull { it.low }
-        dayHighValueView.text = formatMarketValue(dayHigh)
-        dayLowValueView.text = formatMarketValue(dayLow)
+        if (::dayHighValueView.isInitialized) dayHighValueView.text = formatMarketValue(dayHigh)
+        if (::dayLowValueView.isInitialized) dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
-        recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
-        val biasText = when (decision.bias) {
+        if (!snapshot.isStale) recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
+        val intelligence = if (snapshot.isStale) null else MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles)
+        updateMarketIntelligence(intelligence)
+        updateRiskMeter(intelligence?.riskInputs)
+        val displayedBias = if (snapshot.isStale) TradeBias.WAIT else decision.bias
+        val biasText = when (displayedBias) {
             TradeBias.BUY_CE -> "BUY CE"
             TradeBias.BUY_PE -> "BUY PE"
             TradeBias.WAIT -> "WAIT"
         }
-        signalBiasView.text = biasText
-        signalBiasView.setTextColor(
-            when (decision.bias) {
-                TradeBias.BUY_CE -> green
-                TradeBias.BUY_PE -> red
-                TradeBias.WAIT -> amber
-            }
-        )
-        signalStatusView.text = if (decision.confirmed) "SETUP CONFIRMED" else "NO CONFIRMED SETUP"
-        val signalColor = if (decision.confirmed) green else amber
-        signalStatusView.setTextColor(signalColor)
-        signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), signalColor, 30)
-        signalTrendValueView.text = decision.trend
-        signalSetupValueView.text = if (decision.confirmed) "5M VALID" else "WAIT"
-        signalConfirmValueView.text = if (decision.confirmed) "1M OK" else "PENDING"
-
-        val marathiReason = when (decision.bias) {
-            TradeBias.BUY_CE -> "मराठी: 5 मिनिटांचा तेजीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
-            TradeBias.BUY_PE -> "मराठी: 5 मिनिटांचा मंदीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
-            TradeBias.WAIT -> "मराठी: सर्व अटी एकत्र जुळलेल्या नाहीत; पुष्टी येईपर्यंत थांबा."
+        if (::signalBiasView.isInitialized) {
+            signalBiasView.text = biasText
+            signalBiasView.setTextColor(
+                when (displayedBias) {
+                    TradeBias.BUY_CE -> green
+                    TradeBias.BUY_PE -> red
+                    TradeBias.WAIT -> amber
+                }
+            )
         }
-        signalReasonView.text = decision.reasons.joinToString("\n") + "\n" + marathiReason
+        if (::signalStatusView.isInitialized) {
+            signalStatusView.text = when {
+                snapshot.isStale -> "STALE DATA • SIGNALS PAUSED"
+                decision.confirmed -> "SETUP CONFIRMED"
+                else -> "NO CONFIRMED SETUP"
+            }
+            val signalColor = if (decision.confirmed && !snapshot.isStale) green else amber
+            signalStatusView.setTextColor(signalColor)
+            signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), signalColor, 30)
+        }
+        if (::signalTrendValueView.isInitialized) signalTrendValueView.text = decision.trend
+        if (::signalSetupValueView.isInitialized) signalSetupValueView.text =
+            if (snapshot.isStale) "PAUSED" else if (decision.confirmed) "5M VALID" else "WAIT"
+        if (::signalConfirmValueView.isInitialized) signalConfirmValueView.text =
+            if (snapshot.isStale) "STALE" else if (decision.confirmed) "1M OK" else "PENDING"
 
-        vwapValueView.text = formatMarketValue(decision.indicators.vwap)
-        ema9ValueView.text = formatMarketValue(decision.indicators.ema9)
-        ema21ValueView.text = formatMarketValue(decision.indicators.ema21)
-        rsiValueView.text = formatMarketValue(decision.indicators.rsi14)
-        supportValueView.text = formatMarketValue(decision.indicators.support)
-        resistanceValueView.text = formatMarketValue(decision.indicators.resistance)
+        val marathiReason = when {
+            snapshot.isStale -> "मराठी: डेटा जुना आहे. बाजार पुन्हा सुरू होईपर्यंत Live संकेत थांबवले आहेत."
+            decision.bias == TradeBias.BUY_CE -> "मराठी: 5 मिनिटांचा तेजीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
+            decision.bias == TradeBias.BUY_PE -> "मराठी: 5 मिनिटांचा मंदीचा setup आणि 1 मिनिटाची पुष्टी मिळाली."
+            else -> "मराठी: सर्व अटी एकत्र जुळलेल्या नाहीत; पुष्टी येईपर्यंत थांबा."
+        }
+        if (::signalReasonView.isInitialized) {
+            signalReasonView.text = (if (snapshot.isStale) "Historical candles only; no live signal.\n" else decision.reasons.joinToString("\n") + "\n") + marathiReason
+        }
 
-        val visibleCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
-        chart.setCandles(visibleCandles)
-        chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
-        chartModePill.setTextColor(green)
-        chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
-        chartModeNoteView.setTextColor(green)
+        if (::vwapValueView.isInitialized) {
+            vwapValueView.text = decision.indicators.vwap?.let(::formatMarketValue)
+                ?: "N/A (index volume 0)"
+        }
+        if (::ema9ValueView.isInitialized) ema9ValueView.text = formatMarketValue(decision.indicators.ema9)
+        if (::ema21ValueView.isInitialized) ema21ValueView.text = formatMarketValue(decision.indicators.ema21)
+        if (::rsiValueView.isInitialized) rsiValueView.text = formatMarketValue(decision.indicators.rsi14)
+        if (::supportValueView.isInitialized) supportValueView.text = formatMarketValue(decision.indicators.support)
+        if (::resistanceValueView.isInitialized) resistanceValueView.text = formatMarketValue(decision.indicators.resistance)
+
+        if (::chart.isInitialized) {
+            val visibleCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
+            chart.setCandles(visibleCandles)
+        }
+        if (::chartModePill.isInitialized) {
+            chartModePill.text = (if (snapshot.isStale) "LAST " else "LIVE ") + if (tf == "5 MIN") "5M" else "1M"
+            chartModePill.setTextColor(if (snapshot.isStale) amber else green)
+        }
+        if (::chartModeNoteView.isInitialized) {
+            chartModeNoteView.text = if (snapshot.isStale) {
+                "LAST AVAILABLE CANDLES  •  NOT LIVE  •  SIGNALS PAUSED"
+            } else {
+                "LIVE MARKET DATA  •  " + tf + " CANDLES"
+            }
+            chartModeNoteView.setTextColor(if (snapshot.isStale) amber else green)
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -536,6 +630,7 @@ class MainActivity : FragmentActivity() {
         setContentView(root)
         root.requestApplyInsets()
         showPage("Home")
+        // The foreground service owns the read-only Cloudflare Worker feed across Activity lifecycles.
     }
 
     private fun showPage(page: String) {
@@ -544,6 +639,12 @@ class MainActivity : FragmentActivity() {
         when (page) {
             "Home" -> {
                 pageContent.addView(buildHomeDashboard())
+            }
+            "OptionChain" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "NIFTY OPTION CHAIN", "ALL CE / PE STRIKES")
+                pageContent.addView(OptionChainScreen.create(this), LinearLayout.LayoutParams(-1, dp(620)))
             }
             "Chart" -> {
                 pageContent.addView(buildHeader())
@@ -605,6 +706,8 @@ class MainActivity : FragmentActivity() {
             setPadding(0, dp(8), 0, dp(12))
         })
         renderBottomNavigation()
+        // Refresh whichever live-data widgets exist on the newly opened page.
+        latestSnapshot?.let { applyMarketSnapshot(it) }
     }
 
     private fun renderBottomNavigation() {
@@ -799,7 +902,7 @@ class MainActivity : FragmentActivity() {
         )
         addFeatureRow(
             feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "⌁", "Tools"),
-            feature("Option Chain", "Planned after data integration", "⛓", "Chart")
+            feature("Option Chain", "Live CE / PE • OI • IV • Greeks", "⛓", "OptionChain")
         )
         addFeatureRow(
             feature("AI Intelligence", "Filters activate with live candles", "◎", "AI"),
@@ -1150,6 +1253,33 @@ class MainActivity : FragmentActivity() {
         })
         addGap(root, 9)
         addGap(root, 12)
+        section(root, if (isMarathi()) "मार्केट डेटा कनेक्शन" else "MARKET DATA CONNECTION")
+        val connectionCard = card()
+        connectionCard.addView(text("UPSTOX • CLOUDFLARE WORKER", 11f, cyan, true))
+        addGap(connectionCard, 6)
+        workerConnectionDetailView = text("Upstox Worker • Checking connection…", 11f, muted)
+        connectionCard.addView(workerConnectionDetailView)
+        addGap(connectionCard, 8)
+        val testConnectionButton = Button(this).apply {
+            text = if (isMarathi()) "कनेक्शन पुन्हा तपासा" else "TEST / REFRESH CONNECTION"
+            setOnClickListener {
+                isEnabled = false
+                val feed = marketDataFeed
+                if (feed is MarketDataForegroundService) {
+                    feed.refreshNow {
+                        runOnUiThread { isEnabled = true }
+                    }
+                } else {
+                    isEnabled = true
+                    updateFeedStatus(FeedConnectionState.OFFLINE, "Background market service is not connected")
+                }
+            }
+        }
+        connectionCard.addView(testConnectionButton, LinearLayout.LayoutParams(-1, dp(46)))
+        addGap(connectionCard, 5)
+        connectionCard.addView(text("Read-only market data. Broker credentials stay on the secure server; no order execution.", 10f, amber))
+        root.addView(connectionCard)
+        addGap(root, 12)
         section(root, if (isMarathi()) "सूचना आणि अलर्ट" else "NOTIFICATIONS & ALERTS")
         root.addView(buildAlerts())
         addGap(root, 12)
@@ -1217,7 +1347,8 @@ class MainActivity : FragmentActivity() {
         titleCol.addView(text("AI NIFTY OPTIONS TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         wrap.addView(buildDateTimeView())
-        wrap.addView(pill("●  DEMO MODE", amber))
+        headerModePill = pill("● CONNECTING", cyan)
+        wrap.addView(headerModePill)
         return wrap
     }
 
@@ -1363,18 +1494,42 @@ class MainActivity : FragmentActivity() {
     private fun buildInsights(): View {
         val box = card()
         box.addView(text("MARKET BIAS", 10f, muted, true))
-        box.addView(text("Awaiting live market feed", 16f, white, true))
+        marketBiasView = text("Awaiting validated 5-minute candles", 16f, white, true)
+        box.addView(marketBiasView)
         addGap(box, 6)
-        box.addView(text("Volume confirmation • False-breakout filter • Trend strength", 11f, muted))
+        marketDetailView = text("Volume confirmation • False-breakout filter • Trend strength", 11f, muted)
+        box.addView(marketDetailView)
         addGap(box, 8)
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        chips.addView(pill("SUPERTREND", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("MACD", muted))
-        chips.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
-        chips.addView(pill("ADX", muted))
+        fun metric(label: String, setter: (TextView) -> Unit) {
+            val value = pill("$label: —", muted)
+            setter(value)
+            chips.addView(value)
+        }
+        metric("SUPERTREND") { supertrendView = it }
+        chips.addView(View(this), LinearLayout.LayoutParams(dp(5), 1))
+        metric("MACD") { macdView = it }
+        chips.addView(View(this), LinearLayout.LayoutParams(dp(5), 1))
+        metric("ADX") { adxView = it }
         box.addView(chips)
         return box
+    }
+
+    private fun updateMarketIntelligence(result: MarketIntelligenceSnapshot?) {
+        marketBiasView?.text = result?.bias ?: "Waiting for fresh market data"
+        marketDetailView?.text = result?.let {
+            "Trend strength " + (it.adx?.let { value -> String.format(java.util.Locale.US, "%.1f", value) } ?: "N/A") +
+                " • Volume " + it.volumeStatus + " • Breakout " + it.breakoutStatus
+        } ?: "Market intelligence paused until fresh validated candles arrive."
+        supertrendView?.text = "SUPERTREND: " + (result?.supertrend ?: "N/A")
+        macdView?.text = "MACD: " + (result?.macd ?: "N/A")
+        adxView?.text = "ADX: " + (result?.adx?.let { value -> String.format(java.util.Locale.US, "%.1f", value) } ?: "N/A")
+        val tint = if (result == null) muted else when (result.bias) {
+            "BULLISH" -> green
+            "BEARISH" -> red
+            else -> amber
+        }
+        marketBiasView?.setTextColor(tint)
     }
 
     private fun buildAlerts(): View {
@@ -1465,7 +1620,7 @@ class MainActivity : FragmentActivity() {
         box.addView(testButton, LinearLayout.LayoutParams(-1, dp(46)))
         addGap(box, 6)
         box.addView(text(
-            "Alert preferences are saved on this phone. Market-triggered alerts will activate after FYERS live data and signal conditions are connected. No orders are placed.",
+            "Alert preferences are saved on this phone. Market-triggered alerts will activate after Upstox live data and signal conditions are connected. No orders are placed.",
             10f, amber
         ))
         return box
@@ -1828,7 +1983,36 @@ class MainActivity : FragmentActivity() {
                         body
                     )
                 }
-                c.drawText("LIVE CANDLES", l, dp(12).toFloat(), labelPaint)
+                val closes = candles.map { it.close }
+                val ema9Values = TechnicalAnalysis.emaSeries(closes, 9)
+                val ema21Values = TechnicalAnalysis.emaSeries(closes, 21)
+                val ema9Path = Path()
+                val ema21Path = Path()
+                var started9 = false
+                var started21 = false
+                candles.forEachIndexed { i, _ ->
+                    val x = l + step * (i + 0.5f)
+                    ema9Values[i]?.let { value ->
+                        if (!started9) { ema9Path.moveTo(x, liveY(value)); started9 = true }
+                        else ema9Path.lineTo(x, liveY(value))
+                    }
+                    ema21Values[i]?.let { value ->
+                        if (!started21) { ema21Path.moveTo(x, liveY(value)); started21 = true }
+                        else ema21Path.lineTo(x, liveY(value))
+                    }
+                }
+                line.color = cyan
+                c.drawPath(ema9Path, line)
+                line.color = amber
+                c.drawPath(ema21Path, line)
+                val vwap = TechnicalAnalysis.sessionVwap(candles)
+                if (vwap != null) {
+                    line.color = white
+                    line.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5).toFloat(), dp(4).toFloat()), 0f)
+                    c.drawLine(l, liveY(vwap), r, liveY(vwap), line)
+                    line.pathEffect = null
+                }
+                c.drawText("LIVE • EMA 9 / EMA 21" + if (vwap == null) " • VWAP N/A" else " • VWAP", l, dp(12).toFloat(), labelPaint)
                 return
             }
 

@@ -1,0 +1,10 @@
+name = "mgrow-upstox-readonly"
+main = "src/index.ts"
+compatibility_date = "2026-11-16"
+
+# Public, fixed-instrument read-only endpoints. Keep the broker token as a
+# Cloudflare Worker secret; never add it to vars, Git, or the Android APK.
+[[ratelimits]]
+name = "QUOTE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }

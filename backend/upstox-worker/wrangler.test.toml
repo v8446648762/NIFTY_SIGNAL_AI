@@ -1,0 +1,9 @@
+name = "mgrow-upstox-test"
+main = "src/index.ts"
+compatibility_date = "2026-11-16"
+
+# Separate rate-limit namespace so test traffic cannot affect production.
+[[ratelimits]]
+name = "QUOTE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }

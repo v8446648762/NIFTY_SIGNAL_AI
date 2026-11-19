@@ -8,6 +8,15 @@ on:
       - feature/testing-lab-isolated
       - feature/advanced-ai-engine-v1
       - feature/testing-lab-advanced-ai-ui
+      - feature/live-candles-indicators-smart-ai
+      - feature/mgrow-build157-upstox-integration
+      - fix/ai-signal-market-intelligence-risk
+      - feature/mgrow-background-live-data
+      - fix/upstox-429-backoff
+      - feature/mgrow-complete-option-chain-20261119
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -77,3 +86,23 @@ jobs:
           name: MGrow-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+  worker-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/upstox-worker
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Worker dependencies
+        run: npm install
+
+      - name: Build and test read-only Worker
+        run: npm test
