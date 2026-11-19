@@ -43,6 +43,30 @@ class SignalEngineTest {
     }
 
     @Test
+    fun partialHistoryShowsIndicatorsAsSoonAsEachIsCalculable() {
+        val fifteen = SignalEngine.evaluate(risingCandles(15), emptyList())
+        assertEquals(TradeBias.WAIT, fifteen.bias)
+        assertTrue(fifteen.indicators.ema9!! > 0.0)
+        assertNull(fifteen.indicators.ema21)
+        assertTrue(fifteen.indicators.rsi14!! > 0.0)
+
+        val twentyOne = SignalEngine.evaluate(risingCandles(21), emptyList())
+        assertEquals(TradeBias.WAIT, twentyOne.bias)
+        assertTrue(twentyOne.indicators.ema21!! > 0.0)
+        assertTrue(twentyOne.indicators.rsi14!! > 0.0)
+    }
+
+    @Test
+    fun missingOneMinuteConfirmationDoesNotHideFiveMinuteIndicators() {
+        val result = SignalEngine.evaluate(risingCandles(30), emptyList())
+        assertEquals(TradeBias.WAIT, result.bias)
+        assertTrue(result.indicators.ema9!! > 0.0)
+        assertTrue(result.indicators.ema21!! > 0.0)
+        assertTrue(result.indicators.rsi14!! > 0.0)
+        assertFalse(result.confirmed)
+    }
+
+    @Test
     fun alignedBullishCandlesReturnBuyCe() {
         val result = SignalEngine.evaluate(risingCandles(30), risingCandles(3))
         assertEquals(TradeBias.BUY_CE, result.bias)
