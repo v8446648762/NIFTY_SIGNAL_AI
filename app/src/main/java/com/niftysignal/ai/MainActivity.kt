@@ -144,6 +144,8 @@ class MainActivity : FragmentActivity() {
     private val paperHistory = mutableListOf<String>()
     private var marketDataFeed: MarketDataFeed? = null
     private var latestSnapshot: MarketDataSnapshot? = null
+    private var feedConnectionState = FeedConnectionState.OFFLINE
+    private var nextCandleCardHost: LinearLayout? = null
     private var currentPage = "Home"
     private var lastAiSignalKey: String? = null
     private lateinit var pageContent: LinearLayout
@@ -213,6 +215,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun updateFeedStatus(status: FeedConnectionState, message: String? = null) {
+        feedConnectionState = status
         if (::feedStatusView.isInitialized) {
             val color = when (status) {
                 FeedConnectionState.LIVE -> green
@@ -236,6 +239,7 @@ class MainActivity : FragmentActivity() {
 
     private fun clearLiveDashboard(message: String) {
         latestSnapshot = null
+        refreshNextCandleCard()
         if (::indexPriceView.isInitialized) indexPriceView.text = "— — — — —"
         if (::indexHintView.isInitialized) indexHintView.text = message
         if (::changeValueView.isInitialized) changeValueView.text = "—"
@@ -369,6 +373,21 @@ class MainActivity : FragmentActivity() {
         chartModePill.setTextColor(green)
         chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
         chartModeNoteView.setTextColor(green)
+        refreshNextCandleCard()
+    }
+
+    private fun refreshNextCandleCard() {
+        val host = nextCandleCardHost ?: return
+        host.removeAllViews()
+        host.addView(
+            NextCandleProbabilityCard.create(
+                this,
+                latestSnapshot,
+                feedConnectionState,
+                System.currentTimeMillis()
+            ),
+            LinearLayout.LayoutParams(-1, -2)
+        )
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -727,6 +746,10 @@ class MainActivity : FragmentActivity() {
         root.addView(text("NIFTY 50", 29f, white, true))
         addGap(root, 5)
         root.addView(text("Market Overview  •  Live data जोडल्यावर अपडेट", 13f, muted, true))
+        addGap(root, 10)
+        nextCandleCardHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(nextCandleCardHost, LinearLayout.LayoutParams(-1, -2))
+        refreshNextCandleCard()
         addGap(root, 18)
 
         fun feature(title: String, detail: String, symbol: String, destination: String): LinearLayout {
