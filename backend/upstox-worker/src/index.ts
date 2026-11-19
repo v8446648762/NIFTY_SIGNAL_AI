@@ -4,6 +4,7 @@ export interface Env {
 }
 
 const UPSTOX_BASE = "https://api.upstox.com/v3";
+const UPSTOX_V2_BASE = "https://api.upstox.com/v2";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
@@ -47,7 +48,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
-  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles") return json({ error: "not_found" }, 404);
+  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && url.pathname !== "/v1/nifty/option-chain") return json({ error: "not_found" }, 404);
   if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "upstox_token_not_configured" }, 503);
   }
@@ -58,7 +59,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     if (!rateLimit.success) return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
 
-  if (url.pathname === "/v1/nifty/candles") {
+  if (url.pathname === "/v1/nifty/option-chain") {\n    const expiryDate = url.searchParams.get("expiry_date") ?? "";\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(expiryDate)) return json({ error: "invalid_expiry_date", expected: "YYYY-MM-DD" }, 400);\n    const controller = new AbortController();\n    const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);\n    try {\n      const upstreamUrl = `${UPSTOX_V2_BASE}/option/chain?instrument_key=${encodeURIComponent(NIFTY_50_KEY)}&expiry_date=${encodeURIComponent(expiryDate)}`;\n      const upstream = await fetch(upstreamUrl, { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${env.UPSTOX_ANALYTICS_TOKEN}` }, signal: controller.signal });\n      if (!upstream.ok) return json({ error: upstream.status === 429 ? "upstream_rate_limited" : "upstream_option_chain_error", upstreamStatus: upstream.status }, upstream.status === 429 ? 429 : 502);\n      const payload: unknown = await upstream.json();\n      const chain = extractOptionChain(payload);\n      if (!chain) return json({ error: "invalid_upstream_option_chain" }, 502);\n      return json({ provider: "upstox", instrumentKey: NIFTY_50_KEY, expiryDate, receivedAt: new Date().toISOString(), data: chain });\n    } catch (error) {\n      return json({ error: error instanceof Error && error.name === "AbortError" ? "upstream_timeout" : "upstream_option_chain_failed" }, error instanceof Error && error.name === "AbortError" ? 504 : 502);\n    } finally { clearTimeout(timeout); }\n  }\n\n  if (url.pathname === "/v1/nifty/candles") {
     const now = Date.now();
     if (candleCache && now - candleCache.cachedAt <= CANDLE_CACHE_TTL_MS) {
       return json({ ...candleCache.body, cache: "hit" });
@@ -246,3 +247,4 @@ function extractValidQuote(payload: unknown): Record<string, unknown> | null {
   return record;
 }
 
+\n\n/** Validate and normalize the official Upstox option-chain response. */\nexport function extractOptionChain(payload: unknown): Array<Record<string, unknown>> | null {\n  if (!payload || typeof payload !== "object") return null;\n  const root = payload as Record<string, unknown>;\n  if (root.status !== "success" || !Array.isArray(root.data)) return null;\n  const rows: Array<Record<string, unknown>> = [];\n  for (const item of root.data) {\n    if (!item || typeof item !== "object") return null;\n    const row = item as Record<string, unknown>;\n    if (typeof row.strike_price !== "number" || !Number.isFinite(row.strike_price)) return null;\n    const side = (value: unknown) => {\n      if (!value || typeof value !== "object") return null;\n      const sideRow = value as Record<string, unknown>;\n      const market = sideRow.market_data && typeof sideRow.market_data === "object" ? sideRow.market_data as Record<string, unknown> : {};\n      const greeks = sideRow.option_greeks && typeof sideRow.option_greeks === "object" ? sideRow.option_greeks as Record<string, unknown> : {};\n      return { instrumentKey: sideRow.instrument_key ?? null, ltp: market.ltp ?? null, volume: market.volume ?? null, oi: market.oi ?? null, closePrice: market.close_price ?? null, bidPrice: market.bid_price ?? null, bidQuantity: market.bid_qty ?? null, askPrice: market.ask_price ?? null, askQuantity: market.ask_qty ?? null, iv: greeks.iv ?? null, delta: greeks.delta ?? null, gamma: greeks.gamma ?? null, theta: greeks.theta ?? null, vega: greeks.vega ?? null };\n    };\n    rows.push({ strikePrice: row.strike_price, call: side(row.call_options), put: side(row.put_options), underlyingSpotPrice: row.underlying_spot_price ?? null });\n  }\n  rows.sort((a, b) => Number(a.strikePrice) - Number(b.strikePrice));\n  return rows;\n}\n
