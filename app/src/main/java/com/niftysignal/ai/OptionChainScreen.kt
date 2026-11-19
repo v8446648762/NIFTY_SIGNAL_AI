@@ -77,7 +77,7 @@ object OptionChainScreen {
                         val pcr = first?.optDouble("pcr", Double.NaN) ?: Double.NaN
                         val spotPrice = first?.optDouble("underlyingSpotPrice", Double.NaN) ?: Double.NaN
                         spot.text = "Spot: ${number(spotPrice)}     PCR: ${number(pcr)}"
-                        addTableRow(context, table, listOf("CE OI", "CE ΔOI", "CE Vol", "CE IV", "CE LTP", "STRIKE", "PE LTP", "PE IV", "PE Vol", "PE ΔOI", "PE OI"), true)
+                        addTableRow(context, table, listOf("CE OI", "CE ΔOI", "CE Vol", "CE IV", "CE Δ", "CE LTP", "CE Bid", "CE Ask", "STRIKE", "PE Bid", "PE Ask", "PE LTP", "PE Δ", "PE IV", "PE Vol", "PE ΔOI", "PE OI"), true)
                         for (i in 0 until rows.length()) {
                             val row = rows.optJSONObject(i) ?: continue
                             val call = row.optJSONObject("call") ?: JSONObject()
@@ -87,9 +87,15 @@ object OptionChainScreen {
                                 number(call.optDouble("changeOi", Double.NaN)),
                                 number(call.optDouble("volume", Double.NaN)),
                                 number(call.optDouble("iv", Double.NaN)),
+                                number(call.optDouble("delta", Double.NaN)),
                                 number(call.optDouble("ltp", Double.NaN)),
+                                number(call.optDouble("bidPrice", Double.NaN)),
+                                number(call.optDouble("askPrice", Double.NaN)),
                                 number(row.optDouble("strikePrice", Double.NaN)),
+                                number(put.optDouble("bidPrice", Double.NaN)),
+                                number(put.optDouble("askPrice", Double.NaN)),
                                 number(put.optDouble("ltp", Double.NaN)),
+                                number(put.optDouble("delta", Double.NaN)),
                                 number(put.optDouble("iv", Double.NaN)),
                                 number(put.optDouble("volume", Double.NaN)),
                                 number(put.optDouble("changeOi", Double.NaN)),
