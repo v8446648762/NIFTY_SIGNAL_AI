@@ -198,6 +198,9 @@ class MainActivity : FragmentActivity() {
     private lateinit var signalTrendValueView: TextView
     private lateinit var signalSetupValueView: TextView
     private lateinit var signalConfirmValueView: TextView
+    private var nextCandleDirectionView: TextView? = null
+    private var nextCandleConfidenceView: TextView? = null
+    private var nextCandleReasonView: TextView? = null
     private lateinit var vwapValueView: TextView
     private lateinit var ema9ValueView: TextView
     private lateinit var ema21ValueView: TextView
@@ -307,6 +310,7 @@ class MainActivity : FragmentActivity() {
             signalStatusView.background = rounded(Color.argb(190, 41, 38, 66), amber, 30)
         }
         if (::signalReasonView.isInitialized) signalReasonView.text = message
+        updateNextCandlePrediction(null)
         updateMarketIntelligence(null)
         updateRiskMeter(null)
         if (::signalTrendValueView.isInitialized) signalTrendValueView.text = "—"
@@ -393,6 +397,13 @@ class MainActivity : FragmentActivity() {
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
         if (!snapshot.isStale) recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
         val intelligence = if (snapshot.isStale) null else MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles)
+        val nextCandle = NextFiveMinuteCandleEngine.evaluate(
+            snapshot.fiveMinuteCandles,
+            snapshot.oneMinuteCandles,
+            intelligence,
+            snapshot.isStale
+        )
+        updateNextCandlePrediction(nextCandle)
         updateMarketIntelligence(intelligence)
         updateRiskMeter(intelligence?.riskInputs)
         val displayedBias = if (snapshot.isStale) TradeBias.WAIT else decision.bias
@@ -654,6 +665,9 @@ class MainActivity : FragmentActivity() {
                 addGap(pageContent, 14)
                 section(pageContent, "AI SIGNAL ENGINE", "CE / PE / WAIT")
                 pageContent.addView(buildSignalCard())
+                addGap(pageContent, 18)
+                section(pageContent, "SMART AI • NEXT 5M CANDLE", "GREEN / RED / WAIT")
+                pageContent.addView(buildNextCandleCard())
                 addGap(pageContent, 18)
                 section(pageContent, "MARKET INTELLIGENCE", "PRICE ACTION & TREND")
                 pageContent.addView(buildInsights())
@@ -1507,6 +1521,55 @@ class MainActivity : FragmentActivity() {
         metric("ADX") { adxView = it }
         box.addView(chips)
         return box
+    }
+
+    private fun buildNextCandleCard(): View {
+        val box = card()
+        box.background = rounded(Color.argb(238, 22, 38, 58), Color.argb(210, 0, 213, 255), 22)
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        titleRow.addView(text("NEXT 5-MINUTE CANDLE", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        titleRow.addView(helpButton(
+            "SMART AI NEXT CANDLE",
+            "पुढील 5 मिनिटांच्या candle ची दिशा 5M indicators, market trend, support/resistance, price action आणि 1M retest/rejection वापरून अंदाजली जाते. Option Chain live उपलब्ध नसेल तर तो वापरला जात नाही. WAIT म्हणजे पुरेशी पुष्टी नाही.",
+            "Estimates the next 5-minute candle direction using 5M indicators, market trend, support/resistance, price action and 1M retest/rejection. Option Chain is excluded unless live data is available. WAIT means confirmation is insufficient. This is a heuristic, not a validated probability."
+        ))
+        box.addView(titleRow)
+        addGap(box, 9)
+        nextCandleDirectionView = text("WAIT", 30f, amber, true)
+        box.addView(nextCandleDirectionView)
+        nextCandleConfidenceView = text("Heuristic confidence: —", 11f, muted, true)
+        box.addView(nextCandleConfidenceView)
+        addGap(box, 7)
+        nextCandleReasonView = text("Waiting for fresh 5M and 1M candles.", 11f, white)
+        box.addView(nextCandleReasonView)
+        addGap(box, 7)
+        box.addView(text("Option Chain: not connected • excluded from calculation", 10f, amber))
+        box.addView(text("Read-only analysis • No orders • Confidence is not a win probability", 10f, muted))
+        return box
+    }
+
+    private fun updateNextCandlePrediction(result: NextCandlePrediction?) {
+        val direction = result?.direction ?: NextCandleDirection.WAIT
+        val label = when (direction) {
+            NextCandleDirection.GREEN -> "Next Candle is 🟢 GREEN"
+            NextCandleDirection.RED -> "Next Candle is 🔴 RED"
+            NextCandleDirection.WAIT -> "WAIT"
+        }
+        val tint = when (direction) {
+            NextCandleDirection.GREEN -> green
+            NextCandleDirection.RED -> red
+            NextCandleDirection.WAIT -> amber
+        }
+        nextCandleDirectionView?.text = label
+        nextCandleDirectionView?.setTextColor(tint)
+        nextCandleConfidenceView?.text = result?.heuristicConfidence?.let {
+            "Heuristic confidence score: $it/100 • Not a statistical probability"
+        } ?: "Heuristic confidence: unavailable"
+        nextCandleReasonView?.text = result?.reasons?.joinToString(" • ")
+            ?: "Waiting for fresh validated market data."
     }
 
     private fun updateMarketIntelligence(result: MarketIntelligenceSnapshot?) {
