@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handleRequest, extractValidCandles } from "../dist/src/index.js";
+import { handleRequest, extractValidCandles, extractOptionChain, extractOptionExpiries } from "../dist/src/index.js";
 
 const emptyEnv = {
   UPSTOX_ANALYTICS_TOKEN: "",
@@ -95,4 +95,57 @@ test("5m candles remain available when the optional 1m request is rate limited",
   assert.deepEqual(body.warnings, ["one_minute_temporarily_unavailable"]);
   assert.match(calls[0], /minutes\/5$/);
   assert.match(calls[1], /minutes\/1$/);
+});
+
+
+test("option expiry parser returns unique sorted valid expiry dates", () => {
+  const result = extractOptionExpiries({ status: "success", data: [
+    { expiry: "2026-12-03" }, { expiry: "2026-11-26" }, { expiry: "2026-12-03" },
+    { expiry: "2026-02-30" }, { expiry: null },
+  ] });
+  assert.deepEqual(result, ["2026-11-26", "2026-12-03"]);
+});
+
+test("option expiry parser rejects malformed upstream payload", () => {
+  assert.equal(extractOptionExpiries({ status: "error", data: [] }), null);
+});
+
+test("option chain parser normalizes CE and PE rows and sorts strikes", () => {
+  const result = extractOptionChain({ status: "success", data: [
+    { strike_price: 25000, call_options: { instrument_key: "CE", market_data: { ltp: 120, oi: 500 }, option_greeks: { iv: 12, delta: 0.5 } }, put_options: { instrument_key: "PE", market_data: { ltp: 90, oi: 600 }, option_greeks: { iv: 13 } } },
+    { strike_price: 24950, call_options: null, put_options: null },
+  ] });
+  assert.equal(result?.length, 2);
+  assert.equal(result?.[0].strikePrice, 24950);
+  assert.equal(result?.[1].call.ltp, 120);
+  assert.equal(result?.[1].put.oi, 600);
+  assert.equal(result?.[1].call.delta, 0.5);
+});
+
+test("option chain endpoint rejects invalid calendar expiry without upstream request", async () => {
+  let called = false;
+  globalThis.fetch = async () => { called = true; return new Response("{}"); };
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/option-chain?expiry_date=2026-02-30", {
+    headers: { "CF-Connecting-IP": "192.0.2.88" },
+  }), configuredEnv);
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+});
+
+test("option expiries endpoint returns validated expiry dates from Upstox", async () => {
+  let requested = "";
+  globalThis.fetch = async (url, options) => {
+    requested = String(url);
+    assert.match(options.headers.Authorization, /^Bearer server-only-test-token$/);
+    return new Response(JSON.stringify({ status: "success", data: [
+      { expiry: "2026-11-26" }, { expiry: "2026-12-03" },
+    ] }), { status: 200 });
+  };
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/option-expiries", {
+    headers: { "CF-Connecting-IP": "192.0.2.89" },
+  }), configuredEnv);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.data, ["2026-11-26", "2026-12-03"]);
+  assert.match(requested, /\/option\/contract\?/);
 });
