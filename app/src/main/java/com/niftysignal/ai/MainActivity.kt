@@ -175,8 +175,6 @@ class MainActivity : FragmentActivity() {
     private lateinit var pageContent: LinearLayout
     private lateinit var bottomNav: LinearLayout
 
-    private lateinit var paperStatus: TextView
-    private lateinit var paperSelectionView: TextView
     private lateinit var chart: DemoChart
     private lateinit var tf5: TextView
     private lateinit var tf1: TextView
