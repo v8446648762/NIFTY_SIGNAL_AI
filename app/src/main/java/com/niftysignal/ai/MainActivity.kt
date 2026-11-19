@@ -640,6 +640,12 @@ class MainActivity : FragmentActivity() {
             "Home" -> {
                 pageContent.addView(buildHomeDashboard())
             }
+            "OptionChain" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "NIFTY OPTION CHAIN", "ALL CE / PE STRIKES")
+                pageContent.addView(OptionChainScreen.create(this), LinearLayout.LayoutParams(-1, dp(620)))
+            }
             "Chart" -> {
                 pageContent.addView(buildHeader())
                 addGap(pageContent, 14)
@@ -896,7 +902,7 @@ class MainActivity : FragmentActivity() {
         )
         addFeatureRow(
             feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "⌁", "Tools"),
-            feature("Option Chain", "Planned after data integration", "⛓", "Chart")
+            feature("Option Chain", "Live CE / PE • OI • IV • Greeks", "⛓", "OptionChain")
         )
         addFeatureRow(
             feature("AI Intelligence", "Filters activate with live candles", "◎", "AI"),
