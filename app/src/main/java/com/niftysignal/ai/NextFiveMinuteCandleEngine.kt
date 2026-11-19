@@ -77,8 +77,10 @@ object NextFiveMinuteCandleEngine {
         if ((resistance - latest.close) <= range * 0.12) { bear += 8; reasons += "Price near resistance" }
         if ((latest.close - support) <= range * 0.12) { bull += 8; reasons += "Price near support" }
 
-        val bullishRetest = oneLast.close > onePrev.high && oneLast.close > oneLast.open
-        val bearishRetest = oneLast.close < onePrev.low && oneLast.close < oneLast.open
+        val bullishRetest = onePrev.close < onePrev.open &&
+            oneLast.close > onePrev.high && oneLast.close > oneLast.open
+        val bearishRetest = onePrev.close > onePrev.open &&
+            oneLast.close < onePrev.low && oneLast.close < oneLast.open
         when {
             bullishRetest -> { bull += 20; reasons += "1M bullish retest/rejection confirmed" }
             bearishRetest -> { bear += 20; reasons += "1M bearish retest/rejection confirmed" }
