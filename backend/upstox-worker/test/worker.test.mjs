@@ -112,7 +112,7 @@ test("option expiry parser rejects malformed upstream payload", () => {
 
 test("option chain parser normalizes CE and PE rows and sorts strikes", () => {
   const result = extractOptionChain({ status: "success", data: [
-    { strike_price: 25000, call_options: { instrument_key: "CE", market_data: { ltp: 120, oi: 500 }, option_greeks: { iv: 12, delta: 0.5 } }, put_options: { instrument_key: "PE", market_data: { ltp: 90, oi: 600 }, option_greeks: { iv: 13 } } },
+    { strike_price: 25000, call_options: { instrument_key: "CE", market_data: { ltp: 120, oi: 500, prev_oi: 450 }, option_greeks: { iv: 12, delta: 0.5 } }, put_options: { instrument_key: "PE", market_data: { ltp: 90, oi: 600 }, option_greeks: { iv: 13 } } },
     { strike_price: 24950, call_options: null, put_options: null },
   ] });
   assert.equal(result?.length, 2);
@@ -120,6 +120,7 @@ test("option chain parser normalizes CE and PE rows and sorts strikes", () => {
   assert.equal(result?.[1].call.ltp, 120);
   assert.equal(result?.[1].put.oi, 600);
   assert.equal(result?.[1].call.delta, 0.5);
+  assert.equal(result?.[1].call.changeOi, 50);
 });
 
 test("option chain endpoint rejects invalid calendar expiry without upstream request", async () => {
