@@ -77,7 +77,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   if (url.pathname === "/v1/nifty/option-chain") {
     const expiryDate = url.searchParams.get("expiry_date") ?? "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) return json({ error: "invalid_expiry_date", expected: "YYYY-MM-DD" }, 400);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryDate) || !Number.isFinite(Date.parse(`${expiryDate}T00:00:00Z`)) || new Date(`${expiryDate}T00:00:00Z`).toISOString().slice(0, 10) !== expiryDate) return json({ error: "invalid_expiry_date", expected: "YYYY-MM-DD" }, 400);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
     try {
@@ -315,7 +315,7 @@ export function extractOptionExpiries(payload: unknown): string[] | null {
   for (const item of root.data) {
     if (!item || typeof item !== "object") return null;
     const expiry = (item as Record<string, unknown>).expiry;
-    if (typeof expiry !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(expiry)) continue;
+    if (typeof expiry !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) continue;
     const parsed = Date.parse(`${expiry}T00:00:00Z`);
     if (Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === expiry) dates.add(expiry);
   }
