@@ -1,0 +1,26 @@
+name: Validate MGrow Web
+on:
+  push:
+    branches:
+      - web/mgrow-private-site-current
+    paths:
+      - 'web/**'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Pages Function syntax
+        run: node --check web/functions/api/candles.js
+      - name: Check required private-site safeguards
+        run: |
+          test -s web/index.html
+          test -s web/_headers
+          grep -q 'X-Frame-Options: DENY' web/_headers
+          grep -q 'Zero Trust Access' web/README.md
+          grep -q 'market_data_proxy_unavailable' web/functions/api/candles.js
