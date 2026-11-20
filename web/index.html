@@ -43,9 +43,6 @@ document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()
 </script>
 <script>
 const API_BASE="https://mgrow-upstox-readonly.vikaskalburgi130.workers.dev";
-const clock=document.getElementById("clock");
-function tick(){clock.textContent=new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date())+" IST"}tick();setInterval(tick,1000);
-document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("active",p.id===b.dataset.tab))}));
 const el=id=>document.getElementById(id),fmt=n=>Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
 function ema(v,n){let k=2/(n+1),x=v[0];for(let i=1;i<v.length;i++)x=v[i]*k+x*(1-k);return x}
 function rsi(v){if(v.length<15)return null;let g=0,l=0;for(let i=v.length-14;i<v.length;i++){let d=v[i]-v[i-1];if(d>0)g+=d;else l-=d}return l===0?100:100-100/(1+(g/14)/(l/14))}
