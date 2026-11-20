@@ -35,8 +35,8 @@ export default {async fetch(req:Request,env:Env):Promise<Response>{
    upstream("/v3/historical-candle/intraday/"+encodeURIComponent(NIFTY)+"/minutes/1",env.UPSTOX_ANALYTICS_TOKEN).catch(()=>null)
   ]);
   const parse=(p:any)=>{const a=p?.data?.candles;if(p?.status!=="success"||!Array.isArray(a))return null;return a.map((x:any)=>({timestamp:x[0],open:n(x[1]),high:n(x[2]),low:n(x[3]),close:n(x[4]),volume:n(x[5])??0})).filter((x:any)=>typeof x.timestamp==="string"&&[x.open,x.high,x.low,x.close].every((v:any)=>v!==null&&v>0)).sort((a:any,b:any)=>Date.parse(a.timestamp)-Date.parse(b.timestamp)).slice(-180);};
-  const f=parse(five),o=one?parse(one):[];
+  const f=parse(five),o=one?parse(one):null;
   if(!f?.length)return json({error:"invalid_five_minute_candles"},502);
-  return json({provider:"upstox",instrumentKey:NIFTY,receivedAt:new Date().toISOString(),data:{fiveMinuteCandles:f,oneMinuteCandles:o||[]},warnings:o?[]:["one_minute_temporarily_unavailable"]});
+  return json({provider:"upstox",instrumentKey:NIFTY,receivedAt:new Date().toISOString(),data:{fiveMinuteCandles:f,oneMinuteCandles:o||[]},warnings:o?.length?[]:["one_minute_temporarily_unavailable"]});
  }catch(e){return json({error:e instanceof Error&&e.name==="AbortError"?"upstream_timeout":"upstream_request_failed"},502);}
 }};
