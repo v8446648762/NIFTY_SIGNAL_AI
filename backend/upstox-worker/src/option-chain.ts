@@ -84,7 +84,7 @@ export async function handleOptionChainRequest(request: Request, url: URL, env: 
       const expiries = [...new Set(payload.data
         .filter(isRecord)
         .map((item) => item.expiry)
-        .filter((value): value is string => typeof value === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)))]
+        .filter((value): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)))]
         .sort();
       if (expiries.length === 0) return json({ error: "no_option_expiries_available" }, 502);
       const body = { provider: "upstox", underlyingKey: NIFTY_INDEX_KEY, receivedAt: new Date().toISOString(), expiries };
@@ -98,7 +98,7 @@ export async function handleOptionChainRequest(request: Request, url: URL, env: 
 
   if (url.pathname !== "/v1/nifty/option-chain") return json({ error: "not_found" }, 404);
   const expiry = url.searchParams.get("expiry_date") ?? "";
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(expiry)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
     return json({ error: "invalid_expiry_date", expected: "YYYY-MM-DD" }, 400);
   }
   const cacheKey = expiry;
