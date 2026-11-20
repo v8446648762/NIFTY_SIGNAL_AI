@@ -20,6 +20,10 @@
             android:name=".OptionChainImportActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".LiveOptionChainActivity"
+            android:exported="false" />
+
         <service
             android:name=".MarketDataForegroundService"
             android:exported="false"
