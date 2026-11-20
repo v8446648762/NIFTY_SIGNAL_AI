@@ -287,11 +287,13 @@ class LiveOptionChainActivity : Activity() {
     private fun fmt(value: Double?, decimals: Int = 2): String =
         value?.let { String.format(Locale.US, "%,.${decimals}f", it) } ?: "--"
     private fun signed(value: Double?): String = value?.let { (if (it >= 0) "+" else "") + fmt(it, 0) } ?: "--"
-    private fun parseTime(value: String): String = try {
-        val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
-        val date = parser.parse(value) ?: return value
-        SimpleDateFormat("HH:mm:ss", Locale.US).format(date)
-    } catch (_: Exception) { value }
+    private fun parseTime(value: String): String {
+        return try {
+            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+            val date = parser.parse(value)
+            if (date == null) value else SimpleDateFormat("HH:mm:ss", Locale.US).format(date)
+        } catch (_: Exception) { value }
+    }
     private fun label(value: String, size: Float, color: Int) = TextView(this).apply {
         text = value; textSize = size; setTextColor(color); setPadding(0, dp(4), 0, dp(4))
     }
