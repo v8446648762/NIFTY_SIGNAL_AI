@@ -43,9 +43,13 @@ class OptionChainCalculationEngineTest {
     }
 
     @Test fun invalidStrikesAreIgnoredAndEmptyValidChainIsRejected() {
-        val result = OptionChainCalculationEngine.calculate(
-            listOf(row(Double.NaN, 1.0, 1.0, 1.0, 1.0), row(-1.0, 1.0, 1.0, 1.0, 1.0))
-        )
-        fail("Expected an empty valid chain to be rejected: $result")
+        try {
+            OptionChainCalculationEngine.calculate(
+                listOf(row(Double.NaN, 1.0, 1.0, 1.0, 1.0), row(-1.0, 1.0, 1.0, 1.0, 1.0))
+            )
+            fail("Expected an empty valid chain to be rejected.")
+        } catch (_: IllegalArgumentException) {
+            // Expected: invalid strike rows must not produce misleading metrics.
+        }
     }
 }
