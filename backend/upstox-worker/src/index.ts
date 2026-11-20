@@ -32,6 +32,11 @@ function json(body: unknown, status = 200, extraHeaders: Record<string, string> 
       pragma: "no-cache",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
+      // Allow the published MGrow Pages origin to read the same feed as Android.
+      "access-control-allow-origin": "https://v8446648762.github.io",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "Accept, Cache-Control",
+      "vary": "Origin",
       ...extraHeaders,
     },
   });
@@ -41,6 +46,20 @@ export default { fetch: handleRequest };
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+
+  // Browser preflight for the GitHub Pages dashboard; Android GETs are unchanged.
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "https://v8446648762.github.io",
+        "access-control-allow-methods": "GET, OPTIONS",
+        "access-control-allow-headers": "Accept, Cache-Control",
+        "access-control-max-age": "86400",
+        "vary": "Origin",
+      },
+    });
+  }
 
   if (url.pathname === "/health" && request.method === "GET") {
     return json({ service: "mgrow-upstox-proxy", status: "ready", brokerConnected: false });
