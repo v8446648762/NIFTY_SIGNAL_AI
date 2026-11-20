@@ -9,6 +9,7 @@ on:
       - feature/advanced-ai-engine-v1
       - feature/testing-lab-advanced-ai-ui
       - feature/mgrow-isolated-optionchain-analyser-20261120
+      - feature/mgrow-live-data-connection-20261120
 
 jobs:
   build:
