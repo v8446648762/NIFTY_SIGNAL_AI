@@ -35,7 +35,11 @@ data class SmartAnalyserResult(
 )
 
 object SmartAiOptionChainAnalyser {
-    fun analyse(fiveMinute: List<SmartAnalyserCandle>, oneMinute: List<SmartAnalyserCandle>): SmartAnalyserResult {
+    fun analyse(
+        fiveMinute: List<SmartAnalyserCandle>,
+        oneMinute: List<SmartAnalyserCandle>,
+        optionChain: OptionChainMetrics? = null
+    ): SmartAnalyserResult {
         val warnings = mutableListOf<String>()
         if (fiveMinute.size < 22 || oneMinute.size < 2) {
             return waitResult("Insufficient candles: need at least 22 five-minute and 2 one-minute candles.")
@@ -61,10 +65,16 @@ object SmartAiOptionChainAnalyser {
             last1.close < prev1.low -> "1m bearish breakdown confirmation"
             else -> "No 1m breakout confirmation"
         }
+        val pcr = optionChain?.pcr
         val bias = when {
-            bull5 && last1.close > prev1.high -> SmartAnalyserBias.BULLISH
-            bear5 && last1.close < prev1.low -> SmartAnalyserBias.BEARISH
+            bull5 && last1.close > prev1.high && pcr != null && pcr >= 1.10 -> SmartAnalyserBias.BULLISH
+            bear5 && last1.close < prev1.low && pcr != null && pcr <= 0.90 -> SmartAnalyserBias.BEARISH
             else -> SmartAnalyserBias.SIDEWAYS
+        }
+        if (optionChain == null || pcr == null) {
+            warnings += "Live option-chain PCR is unavailable; directional confirmation is withheld."
+        } else if (pcr in 0.90..1.10) {
+            warnings += "PCR is neutral; option-chain direction is not confirmed."
         }
         val recent = fiveMinute.takeLast(20)
         val alignment = when (bias) {
@@ -75,8 +85,8 @@ object SmartAiOptionChainAnalyser {
         }
         val confidence = ((alignment * 20) + (abs(rsi - 50.0).coerceAtMost(20.0))).toInt().coerceIn(0, 95)
         val explanation = when (bias) {
-            SmartAnalyserBias.BULLISH -> "5m bullish structure with 1m breakout confirmation. This is an analysis indication, not an order."
-            SmartAnalyserBias.BEARISH -> "5m bearish structure with 1m breakdown confirmation. This is an analysis indication, not an order."
+            SmartAnalyserBias.BULLISH -> "5m bullish structure, 1m breakout and PCR bullish confirmation. Analysis only; not an order."
+            SmartAnalyserBias.BEARISH -> "5m bearish structure, 1m breakdown and PCR bearish confirmation. Analysis only; not an order."
             else -> "5m conditions and 1m confirmation are not aligned; wait for a clearer setup."
         }
         return SmartAnalyserResult(
