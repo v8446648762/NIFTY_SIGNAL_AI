@@ -1340,7 +1340,8 @@ class MainActivity : FragmentActivity() {
             box.addView(text("Upstox live option-chain data is not available in the current feed. No sample or fabricated OI, PCR, IV or Greeks are shown.", 12f, muted))
             return box
         }
-        val spot = snapshot.fiveMinuteCandles.lastOrNull()?.close
+        val liveSnapshot = snapshot ?: return box
+        val spot = liveSnapshot.fiveMinuteCandles.lastOrNull()?.close
         val metrics = try { OptionChainCalculationEngine.calculate(rows, spot) } catch (error: Exception) {
             box.addView(text("OPTION CHAIN CALCULATION ERROR", 13f, red, true))
             box.addView(text(error.message ?: "Invalid option-chain data.", 11f, muted))
