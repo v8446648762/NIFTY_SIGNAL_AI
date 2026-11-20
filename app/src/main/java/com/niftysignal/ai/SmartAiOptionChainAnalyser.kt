@@ -5,9 +5,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Standalone Smart AI Analyser calculation model.
- * Uses its own candle type and calculations; it does not call the existing
- * TechnicalAnalysis, SignalEngine, or OptionChainCalculationEngine.
+ * Smart AI analyser: combines its own 5m/1m candle calculations with
+ * validated live option-chain metrics supplied by the caller.
  */
 data class SmartAnalyserCandle(
     val timestampMillis: Long,
@@ -35,7 +34,11 @@ data class SmartAnalyserResult(
 )
 
 object SmartAiOptionChainAnalyser {
-    fun analyse(fiveMinute: List<SmartAnalyserCandle>, oneMinute: List<SmartAnalyserCandle>): SmartAnalyserResult {
+    fun analyse(
+        fiveMinute: List<SmartAnalyserCandle>,
+        oneMinute: List<SmartAnalyserCandle>,
+        optionChain: OptionChainMetrics? = null
+    ): SmartAnalyserResult {
         val warnings = mutableListOf<String>()
         if (fiveMinute.size < 22 || oneMinute.size < 2) {
             return waitResult("Insufficient candles: need at least 22 five-minute and 2 one-minute candles.")
@@ -61,10 +64,17 @@ object SmartAiOptionChainAnalyser {
             last1.close < prev1.low -> "1m bearish breakdown confirmation"
             else -> "No 1m breakout confirmation"
         }
+        val pcr = optionChain?.pcr
         val bias = when {
-            bull5 && last1.close > prev1.high -> SmartAnalyserBias.BULLISH
-            bear5 && last1.close < prev1.low -> SmartAnalyserBias.BEARISH
+            bull5 && last1.close > prev1.high && pcr != null && pcr >= 1.10 -> SmartAnalyserBias.BULLISH
+            bear5 && last1.close < prev1.low && pcr != null && pcr <= 0.90 -> SmartAnalyserBias.BEARISH
+            pcr == null -> SmartAnalyserBias.WAIT
             else -> SmartAnalyserBias.SIDEWAYS
+        }
+        if (optionChain == null || pcr == null) {
+            warnings += "Live option-chain PCR is unavailable; directional confirmation is withheld."
+        } else if (pcr in 0.90..1.10) {
+            warnings += "PCR is neutral; option-chain direction is not confirmed."
         }
         val recent = fiveMinute.takeLast(20)
         val alignment = when (bias) {
@@ -75,9 +85,10 @@ object SmartAiOptionChainAnalyser {
         }
         val confidence = ((alignment * 20) + (abs(rsi - 50.0).coerceAtMost(20.0))).toInt().coerceIn(0, 95)
         val explanation = when (bias) {
-            SmartAnalyserBias.BULLISH -> "5m bullish structure with 1m breakout confirmation. This is an analysis indication, not an order."
-            SmartAnalyserBias.BEARISH -> "5m bearish structure with 1m breakdown confirmation. This is an analysis indication, not an order."
-            else -> "5m conditions and 1m confirmation are not aligned; wait for a clearer setup."
+            SmartAnalyserBias.BULLISH -> "5m bullish structure, 1m breakout and PCR bullish confirmation. Analysis only; not an order."
+            SmartAnalyserBias.BEARISH -> "5m bearish structure, 1m breakdown and PCR bearish confirmation. Analysis only; not an order."
+            SmartAnalyserBias.WAIT -> "Live option-chain confirmation is missing; no directional result is issued."
+            SmartAnalyserBias.SIDEWAYS -> "5m conditions, 1m confirmation and option-chain PCR are not aligned; wait for a clearer setup."
         }
         return SmartAnalyserResult(
             bias, confidence, ema9, ema21, rsi, vwap,
