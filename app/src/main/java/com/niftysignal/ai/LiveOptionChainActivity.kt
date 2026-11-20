@@ -285,7 +285,7 @@ class LiveOptionChainActivity : Activity() {
         return obj.optDouble(key, Double.NaN).takeIf { it.isFinite() }
     }
     private fun fmt(value: Double?, decimals: Int = 2): String =
-        value?.let { String.format(Locale.US, "%,.\${decimals}f", it) } ?: "--"
+        value?.let { String.format(Locale.US, "%,.${decimals}f", it) } ?: "--"
     private fun signed(value: Double?): String = value?.let { (if (it >= 0) "+" else "") + fmt(it, 0) } ?: "--"
     private fun parseTime(value: String): String = try {
         val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
