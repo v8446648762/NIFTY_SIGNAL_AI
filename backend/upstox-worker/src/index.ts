@@ -45,7 +45,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
-  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles") return json({ error: "not_found" }, 404);
+  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && url.pathname !== "/v1/nifty/option-chain") return json({ error: "not_found" }, 404);
   if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "upstox_token_not_configured" }, 503);
   }
@@ -55,6 +55,72 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const rateLimit = await env.QUOTE_LIMITER.limit({ key: `nifty-readonly:${clientIp}` });
     if (!rateLimit.success) return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
+
+  if (url.pathname === "/v1/nifty/option-chain") {
+    const expiryDate = url.searchParams.get("expiry_date") ?? "";
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(expiryDate) || !Number.isFinite(Date.parse(expiryDate + "T00:00:00Z"))) {
+      return json({ error: "invalid_expiry_date", expected: "YYYY-MM-DD" }, 400);
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    try {
+      const upstream = await fetch(
+        `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(NIFTY_50_KEY)}&expiry_date=${encodeURIComponent(expiryDate)}`,
+        {
+          method: "GET",
+          headers: { Accept: "application/json", Authorization: `Bearer ${env.UPSTOX_ANALYTICS_TOKEN}` },
+          signal: controller.signal,
+        },
+      );
+      if (!upstream.ok) return json({ error: "upstream_option_chain_error", upstreamStatus: upstream.status }, 502);
+      const payload: unknown = await upstream.json();
+      if (!payload || typeof payload !== "object") return json({ error: "invalid_upstream_option_chain" }, 502);
+      const root = payload as Record<string, unknown>;
+      if (root.status !== "success" || !Array.isArray(root.data)) return json({ error: "invalid_upstream_option_chain" }, 502);
+      const rows = root.data.map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const row = item as Record<string, unknown>;
+        const call = row.call_options && typeof row.call_options === "object" ? row.call_options as Record<string, unknown> : {};
+        const put = row.put_options && typeof row.put_options === "object" ? row.put_options as Record<string, unknown> : {};
+        const callMarket = call.market_data && typeof call.market_data === "object" ? call.market_data as Record<string, unknown> : {};
+        const putMarket = put.market_data && typeof put.market_data === "object" ? put.market_data as Record<string, unknown> : {};
+        const callGreeks = call.option_greeks && typeof call.option_greeks === "object" ? call.option_greeks as Record<string, unknown> : {};
+        const putGreeks = put.option_greeks && typeof put.option_greeks === "object" ? put.option_greeks as Record<string, unknown> : {};
+        const strike = row.strike_price;
+        if (typeof strike !== "number" || !Number.isFinite(strike) || strike <= 0) return null;
+        const num = (v: unknown): number | null => typeof v === "number" && Number.isFinite(v) ? v : null;
+        const callOi = num(callMarket.oi), putOi = num(putMarket.oi);
+        const callPrevOi = num(callMarket.prev_oi), putPrevOi = num(putMarket.prev_oi);
+        return {
+          strike,
+          callOi, callOiChange: callOi !== null && callPrevOi !== null ? callOi - callPrevOi : null,
+          callVolume: num(callMarket.volume), callLtp: num(callMarket.ltp),
+          callIv: num(callGreeks.iv), callDelta: num(callGreeks.delta),
+          callBid: num(callMarket.bid_price), callAsk: num(callMarket.ask_price),
+          putOi, putOiChange: putOi !== null && putPrevOi !== null ? putOi - putPrevOi : null,
+          putVolume: num(putMarket.volume), putLtp: num(putMarket.ltp),
+          putIv: num(putGreeks.iv), putDelta: num(putGreeks.delta),
+          putBid: num(putMarket.bid_price), putAsk: num(putMarket.ask_price),
+        };
+      }).filter((row): row is NonNullable<typeof row> => row !== null);
+      if (rows.length === 0) return json({ error: "empty_option_chain" }, 502);
+      const first = root.data[0] as Record<string, unknown>;
+      return json({
+        provider: "upstox",
+        instrumentKey: NIFTY_50_KEY,
+        expiryDate,
+        receivedAt: new Date().toISOString(),
+        spot: typeof first.underlying_spot_price === "number" ? first.underlying_spot_price : null,
+        pcr: typeof first.pcr === "number" ? first.pcr : null,
+        data: rows,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return json({ error: "upstream_timeout" }, 504);
+      return json({ error: "upstream_option_chain_request_failed" }, 502);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
   if (url.pathname === "/v1/nifty/candles") {
     const now = Date.now();
