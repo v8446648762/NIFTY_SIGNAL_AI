@@ -1,22 +1,27 @@
-# MGrow live Upstox data worker (read-only)
+# MGrow read-only Upstox data worker
 
-This branch adds the server-side NIFTY option-chain and 1m/5m candle routes. It is not deployed and is not yet connected to the Android UI.
+This worker supplies the Android app's NIFTY 50 candles and option chain. It does not place orders.
 
 ## Routes
-- `GET /health` is public and reports worker readiness only.
-- `GET /v1/nifty/option-chain?expiry_date=YYYY-MM-DD` returns normalized CE/PE OI, change in OI (OI minus previous OI), volume, LTP, IV, delta, bid/ask, spot and PCR.
-- `GET /v1/nifty/candles` returns independent 1m and 5m NIFTY candles.
+- `GET /health` — worker health only.
+- `GET /v1/nifty/expiries` — upcoming NIFTY option expiries from Upstox.
+- `GET /v1/nifty/option-chain?expiry_date=YYYY-MM-DD` — CE/PE OI, change in OI, volume, LTP, IV, delta, bid/ask and strike.
+- `GET /v1/nifty/candles` — independent 5-minute and 1-minute NIFTY candles.
 
-## Authentication and secrets
-All data routes require a Google ID token in `Authorization: Bearer <Google-ID-token>`. The worker verifies RS256 signature, issuer, audience, expiry, verified email and the configured owner email. The Upstox token is read only from the Cloudflare Worker secret `UPSTOX_ANALYTICS_TOKEN`; never put it in Android, GitHub, screenshots or chat.
+## Security
+- Set `UPSTOX_ANALYTICS_TOKEN` only as a Cloudflare Worker secret. It is never returned to Android.
+- Data routes are read-only and rate-limited by Cloudflare client IP using `QUOTE_LIMITER`.
+- No Google login, app login, fingerprint-to-broker authentication, or order endpoint is added.
+- Because the read-only data routes are public, keep the Cloudflare IP rate limiter enabled and monitor its usage.
 
-Configure Worker variables `GOOGLE_CLIENT_ID` and `MGROW_ALLOWED_GOOGLE_EMAIL`, and secret `UPSTOX_ANALYTICS_TOKEN`. Configure the `QUOTE_LIMITER` binding as declared in wrangler.toml.
+## Deploy configuration
+1. Install dependencies and run `npm run build`.
+2. Configure the `QUOTE_LIMITER` binding from `wrangler.toml`.
+3. Add the Upstox access token as a Worker secret named `UPSTOX_ANALYTICS_TOKEN`.
+4. Deploy the worker and note its exact `workers.dev` URL.
+5. Supply that URL as the Android build environment variable `MGROW_API_BASE_URL`.
 
-## Not yet complete
-- Android Google Credential Manager login / ID-token handoff is not wired to the app.
-- Android MarketDataFeed adapter and option-chain UI mapping are not wired.
-- No Worker deployment, Cloudflare secret setup, live Upstox request, or APK build has been performed.
-- Verify Upstox API access and expiry-date availability before deployment.
-- Build and test this Worker before deployment; do not deploy until the Android authentication flow is connected and reviewed.
+## Android connection
+The Android adapter polls the worker every 30 seconds, discovers the nearest upcoming expiry, and maps the response into the existing Option Chain and Smart AI Analyser screens. No broker credential is stored in the APK.
 
-No order-placement endpoint exists. This service is read-only.
+A worker deployment, Cloudflare secret configuration, live API validation and APK build are separate operational steps; this repository change does not claim they have happened.
