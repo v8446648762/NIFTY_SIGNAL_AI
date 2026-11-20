@@ -96,3 +96,75 @@ test("5m candles remain available when the optional 1m request is rate limited",
   assert.match(calls[0], /minutes\/5$/);
   assert.match(calls[1], /minutes\/1$/);
 });
+
+
+test("NIFTY option-expiries returns only validated expiries from Upstox contracts", async () => {
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /\/v2\/option\/contract\?/);
+    return new Response(JSON.stringify({ status: "success", data: [
+      { expiry: "2026-11-26", instrument_key: "NSE_FO|1" },
+      { expiry: "2026-12-03", instrument_key: "NSE_FO|2" },
+      { expiry: "invalid", instrument_key: "NSE_FO|3" },
+      { expiry: "2026-11-26", instrument_key: "NSE_FO|4" },
+    ] }), { status: 200 });
+  };
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/option-expiries", {
+    headers: { "CF-Connecting-IP": "192.0.2.81" },
+  }), configuredEnv);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.expiries, ["2026-11-26", "2026-12-03"]);
+  assert.equal(body.provider, "upstox");
+});
+
+test("NIFTY option-chain returns all strikes, CE/PE OI change, volume, LTP and Greeks", async () => {
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /\/v2\/option\/chain\?/);
+    assert.match(String(url), /expiry_date=2026-11-26/);
+    return new Response(JSON.stringify({ status: "success", data: [
+      {
+        expiry: "2026-11-26", strike_price: 25000, underlying_spot_price: 25040,
+        call_options: {
+          instrument_key: "NSE_FO|CE1",
+          market_data: { ltp: 120.5, volume: 10000, oi: 50000, prev_oi: 45000, bid_price: 120, ask_price: 121 },
+          option_greeks: { iv: 12.5, delta: 0.55, gamma: 0.001, theta: -8, vega: 10 },
+        },
+        put_options: {
+          instrument_key: "NSE_FO|PE1",
+          market_data: { ltp: 85.5, volume: 12000, oi: 60000, prev_oi: 57000, bid_price: 85, ask_price: 86 },
+          option_greeks: { iv: 13.5, delta: -0.45, gamma: 0.0011, theta: -7, vega: 9 },
+        },
+      },
+      {
+        expiry: "2026-11-26", strike_price: 25100, underlying_spot_price: 25040,
+        call_options: { market_data: { ltp: 75, volume: 7000, oi: 30000, prev_oi: 31000 }, option_greeks: {} },
+        put_options: { market_data: { ltp: 125, volume: 8000, oi: 40000, prev_oi: 38000 }, option_greeks: {} },
+      },
+    ] }), { status: 200 });
+  };
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/option-chain?expiry_date=2026-11-26", {
+    headers: { "CF-Connecting-IP": "192.0.2.82" },
+  }), configuredEnv);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.rows.length, 2);
+  assert.equal(body.rows[0].strikePrice, 25000);
+  assert.equal(body.rows[0].call.oiChange, 5000);
+  assert.equal(body.rows[0].put.oiChange, 3000);
+  assert.equal(body.rows[0].call.volume, 10000);
+  assert.equal(body.rows[0].call.ltp, 120.5);
+  assert.equal(body.rows[0].call.iv, 12.5);
+  assert.equal(body.rows[0].put.delta, -0.45);
+  assert.equal(body.underlyingSpotPrice, 25040);
+  assert.equal(body.totalCallOi, 80000);
+  assert.equal(body.totalPutOi, 100000);
+  assert.equal(body.pcr, 1.25);
+});
+
+test("NIFTY option-chain rejects malformed expiry values", async () => {
+  const response = await handleRequest(new Request("https://worker.example/v1/nifty/option-chain?expiry_date=next-week", {
+    headers: { "CF-Connecting-IP": "192.0.2.83" },
+  }), configuredEnv);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "invalid_expiry_date", expected: "YYYY-MM-DD" });
+});
