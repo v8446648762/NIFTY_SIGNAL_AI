@@ -846,7 +846,7 @@ class MainActivity : FragmentActivity() {
                 isClickable = true
                 isFocusable = true
                 contentDescription = "$title. $detail"
-                setOnClickListener { showPage(destination) }
+                setOnClickListener { if (destination == "OptionChain") startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java)) else showPage(destination) }
 
                 val titleRow = LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -894,7 +894,7 @@ class MainActivity : FragmentActivity() {
         )
         addFeatureRow(
             feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "⌁", "Tools"),
-            feature("Option Chain", "Planned after data integration", "⛓", "Chart")
+            feature("Option Chain", "Live CE / PE • OI • Greeks • Smart AI", "⛓", "OptionChain")
         )
         addFeatureRow(
             feature("AI Intelligence", "Filters activate with live candles", "◎", "AI"),
