@@ -52,24 +52,35 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Run unit tests and build debug APK
-        run: gradle :app:testDebugUnitTest :app:assembleDebug
+      - name: Run unit tests
+        id: unit_tests
+        continue-on-error: true
+        run: gradle :app:testDebugUnitTest
+
+      - name: Build debug APK for UI preview
+        run: gradle :app:assembleDebug
+
+      - name: Generate debug APK checksum
+        run: sha256sum app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload debug APK for UI preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: MGrow-debug-apk-preview
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Stop release build when unit tests fail
+        if: steps.unit_tests.outcome == 'failure'
+        run: |
+          echo "Debug preview APK uploaded, but unit tests failed. Release build is blocked."
+          exit 1
 
       - name: Build permanently signed release APK
         if: steps.signing.outputs.ready == 'true'
         env:
           MGROW_KEYSTORE_PATH: ${{ runner.temp }}/mgrow-release.jks
         run: gradle :app:assembleRelease
-
-      - name: Generate debug APK checksum
-        run: sha256sum app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: MGrow-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
 
       - name: Generate release APK checksum
         if: steps.signing.outputs.ready == 'true'
