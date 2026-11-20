@@ -816,12 +816,15 @@ class MainActivity : FragmentActivity() {
         )
         addFeatureRow(
             feature("Smart AI Analyser", "Independent 5m + 1m analysis", "◎", "Smart Analyser"),
-            feature("AI Intelligence", "Existing filters and indicators", "✦", "AI"),
-            feature("Risk Manager", "Risk score • Live data required", "⬡", "AI")
+            feature("AI Intelligence", "Existing filters and indicators", "✦", "AI")
         )
         addFeatureRow(
-            feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts"),
-            feature("Paper Trading", "Manual practice • Session only", "▤", "Tools")
+            feature("Risk Manager", "Risk score • Live data required", "⬡", "AI"),
+            feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts")
+        )
+        addFeatureRow(
+            feature("Paper Trading", "Manual practice • Session only", "▤", "Tools"),
+            feature("Reports", "Manual Trades • AI Signals", "▤", "Reports")
         )
         val reportsTile = feature("Reports", "Manual Trades • AI Signals • Performance", "▤", "Reports")
         reportsTile.layoutParams = LinearLayout.LayoutParams(-1, -2)
