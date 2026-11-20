@@ -14,6 +14,7 @@ on:
       - feature/mgrow-background-live-data
       - fix/upstox-429-backoff
       - feature/mgrow-next-5m-candle-from-177
+      - feature/build196-vgrowth-logo-only
 
 jobs:
   build:
