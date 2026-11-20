@@ -369,6 +369,7 @@ class MainActivity : FragmentActivity() {
         chartModePill.setTextColor(green)
         chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
         chartModeNoteView.setTextColor(green)
+        if (currentPage == "Option Chain" || currentPage == "Smart Analyser") showPage(currentPage)
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -544,6 +545,18 @@ class MainActivity : FragmentActivity() {
         when (page) {
             "Home" -> {
                 pageContent.addView(buildHomeDashboard())
+            }
+            "Option Chain" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "LIVE OPTION CHAIN", "OI • CHANGE IN OI • PCR")
+                pageContent.addView(buildOptionChainPage())
+            }
+            "Smart Analyser" -> {
+                pageContent.addView(buildHeader())
+                addGap(pageContent, 14)
+                section(pageContent, "SMART AI OPTION CHAIN ANALYSER", "5M TREND • 1M CONFIRMATION")
+                pageContent.addView(buildSmartAnalyserPage())
             }
             "Chart" -> {
                 pageContent.addView(buildHeader())
@@ -799,15 +812,19 @@ class MainActivity : FragmentActivity() {
         )
         addFeatureRow(
             feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "⌁", "Tools"),
-            feature("Option Chain", "Planned after data integration", "⛓", "Chart")
+            feature("Option Chain", "Separate OI / PCR calculation", "⛓", "Option Chain")
         )
         addFeatureRow(
-            feature("AI Intelligence", "Filters activate with live candles", "◎", "AI"),
-            feature("Risk Manager", "Risk score • Live data required", "⬡", "AI")
+            feature("Smart AI Analyser", "Independent 5m + 1m analysis", "◎", "Smart Analyser"),
+            feature("AI Intelligence", "Existing filters and indicators", "✦", "AI")
         )
         addFeatureRow(
-            feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts"),
-            feature("Paper Trading", "Manual practice • Session only", "▤", "Tools")
+            feature("Risk Manager", "Risk score • Live data required", "⬡", "AI"),
+            feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts")
+        )
+        addFeatureRow(
+            feature("Paper Trading", "Manual practice • Session only", "▤", "Tools"),
+            feature("Reports", "Manual Trades • AI Signals", "▤", "Reports")
         )
         val reportsTile = feature("Reports", "Manual Trades • AI Signals • Performance", "▤", "Reports")
         reportsTile.layoutParams = LinearLayout.LayoutParams(-1, -2)
@@ -1313,6 +1330,64 @@ class MainActivity : FragmentActivity() {
         return box
     }
 
+    private fun buildOptionChainPage(): View {
+        val box = card()
+        val snapshot = latestSnapshot
+        val rows = snapshot?.optionChain.orEmpty()
+        if (rows.isEmpty()) {
+            box.addView(text("OPTION CHAIN DATA NOT CONNECTED", 14f, amber, true))
+            addGap(box, 8)
+            box.addView(text("Upstox live option-chain data is not available in the current feed. No sample or fabricated OI, PCR, IV or Greeks are shown.", 12f, muted))
+            return box
+        }
+        val liveSnapshot = snapshot ?: return box
+        val spot = liveSnapshot.fiveMinuteCandles.lastOrNull()?.close
+        val metrics = try { OptionChainCalculationEngine.calculate(rows, spot) } catch (error: Exception) {
+            box.addView(text("OPTION CHAIN CALCULATION ERROR", 13f, red, true))
+            box.addView(text(error.message ?: "Invalid option-chain data.", 11f, muted))
+            return box
+        }
+        box.addView(text("PCR  " + (metrics.pcr?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "—"), 22f, cyan, true))
+        addGap(box, 6)
+        box.addView(text("Total CE OI  " + formatMarketValue(metrics.totalCallOi) + "     Total PE OI  " + formatMarketValue(metrics.totalPutOi), 11f, white, true))
+        box.addView(text("Max CE OI  " + (metrics.highestCallOiStrike?.let(::formatMarketValue) ?: "—") + "     Max PE OI  " + (metrics.highestPutOiStrike?.let(::formatMarketValue) ?: "—"), 11f, muted))
+        box.addView(text("Support candidates  " + metrics.supportCandidates.joinToString(", ").ifEmpty { "—" }, 11f, green))
+        box.addView(text("Resistance candidates  " + metrics.resistanceCandidates.joinToString(", ").ifEmpty { "—" }, 11f, red))
+        addGap(box, 10)
+        box.addView(text("CE OI / ΔOI / LTP  |  STRIKE  |  PE LTP / ΔOI / OI", 10f, cyan, true))
+        rows.sortedBy { it.strike }.forEach { row ->
+            val line = "CE " + formatMarketValue(row.callOi) + " / " + formatMarketValue(row.callOiChange) + " / " + formatMarketValue(row.callLtp) + "  |  " + formatMarketValue(row.strike) + "  |  " + formatMarketValue(row.putLtp) + " / " + formatMarketValue(row.putOiChange) + " / " + formatMarketValue(row.putOi) + " PE"
+            box.addView(text(line, 10f, white))
+        }
+        metrics.warnings.forEach { box.addView(text(it, 10f, amber)) }
+        return box
+    }
+
+    private fun buildSmartAnalyserPage(): View {
+        val box = card()
+        val snapshot = latestSnapshot
+        if (snapshot == null) {
+            box.addView(text("WAITING FOR VALIDATED LIVE CANDLES", 14f, amber, true))
+            box.addView(text("The independent analyser uses 5-minute candles for trend and 1-minute candles only for confirmation.", 12f, muted))
+            return box
+        }
+        val five = snapshot.fiveMinuteCandles.map { SmartAnalyserCandle(it.timestampMillis, it.open, it.high, it.low, it.close, it.volume) }
+        val one = snapshot.oneMinuteCandles.map { SmartAnalyserCandle(it.timestampMillis, it.open, it.high, it.low, it.close, it.volume) }
+        val result = SmartAiOptionChainAnalyser.analyse(five, one)
+        val biasColor = when (result.bias) { SmartAnalyserBias.BULLISH -> green; SmartAnalyserBias.BEARISH -> red; else -> amber }
+        box.addView(text(result.bias.name, 26f, biasColor, true))
+        box.addView(text("Confidence score: " + result.confidencePercent + "% (calculation score, not win probability)", 10f, muted))
+        addGap(box, 10)
+        listOf("EMA 9" to result.ema9, "EMA 21" to result.ema21, "RSI 14" to result.rsi14, "VWAP" to result.vwap, "Support" to result.support, "Resistance" to result.resistance).forEach { (label, value) ->
+            box.addView(text(label + ": " + (value?.let(::formatMarketValue) ?: "—"), 12f, white))
+        }
+        addGap(box, 8)
+        box.addView(text(result.oneMinuteConfirmation, 12f, cyan, true))
+        box.addView(text(result.explanation, 11f, muted))
+        result.warnings.forEach { box.addView(text(it, 10f, amber)) }
+        box.addView(text("This analyser is separate from the existing SignalEngine and Option Chain calculations. Analysis only; no orders are placed.", 10f, amber))
+        return box
+    }
     private fun buildIndicators(): View {
         val box = card()
         val rows = listOf(

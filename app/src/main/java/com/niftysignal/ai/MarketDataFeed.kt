@@ -24,6 +24,7 @@ data class MarketDataSnapshot(
     val fiveMinuteCandles: List<MarketCandle>,
     val oneMinuteCandles: List<MarketCandle>,
     val receivedAtMillis: Long,
+    val optionChain: List<OptionChainContract> = emptyList(),
     val previousClose: Double? = null,
     val dayHigh: Double? = null,
     val dayLow: Double? = null
