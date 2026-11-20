@@ -47,6 +47,51 @@ const el=id=>document.getElementById(id),fmt=n=>Number(n).toLocaleString("en-IN"
 function ema(v,n){let k=2/(n+1),x=v[0];for(let i=1;i<v.length;i++)x=v[i]*k+x*(1-k);return x}
 function rsi(v){if(v.length<15)return null;let g=0,l=0;for(let i=v.length-14;i<v.length;i++){let d=v[i]-v[i-1];if(d>0)g+=d;else l-=d}return l===0?100:100-100/(1+(g/14)/(l/14))}
 function chart(cs){let a=cs.slice(-60),w=720,h=250,p=18,lo=Math.min(...a.map(x=>x.low)),hi=Math.max(...a.map(x=>x.high)),span=Math.max(hi-lo,.01),pts=a.map((x,i)=>(p+i*(w-2*p)/Math.max(a.length-1,1)).toFixed(1)+","+(h-p-(x.close-lo)*(h-2*p)/span).toFixed(1)).join(" ");el("nifty-chart").innerHTML='<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:100%;max-height:260px"><polyline fill="none" stroke="#29e5e5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/></svg><p>Verified 5-minute candles · ₹'+fmt(a[a.length-1].close)+'</p>'}
-async function refresh(){try{let r=await fetch(API_BASE+"/v1/nifty/candles",{headers:{Accept:"application/json"},cache:"no-store"});if(!r.ok)throw Error("Feed HTTP "+r.status);let j=await r.json();if(j.provider!=="upstox"||!j.data)throw Error("Unexpected feed response");let c=(j.data.fiveMinuteCandles||[]).filter(x=>[x.open,x.high,x.low,x.close].every(v=>Number.isFinite(v)&&v>0)&&x.high>=Math.max(x.open,x.close,x.low)&&x.low<=Math.min(x.open,x.close,x.high));let one=j.data.oneMinuteCandles||[];if(c.length<22)throw Error("Not enough verified 5-minute candles");let last=c[c.length-1],stale=Date.now()-Date.parse(last.timestamp)>600000,cl=c.map(x=>x.close),e9=ema(cl.slice(-60),9),e21=ema(cl.slice(-80),21),rv=rsi(cl),support=Math.min(...c.slice(-20).map(x=>x.low)),resistance=Math.max(...c.slice(-20).map(x=>x.high)),bias=e9>e21?"BULLISH":e9<e21?"BEARISH":"NEUTRAL";el("nifty-price").textContent=fmt(last.close);el("nifty-time").textContent=(stale?"STALE · ":"Updated · ")+new Date(last.timestamp).toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata"});el("market-bias").textContent=stale?"PAUSED":bias;el("bias-note").textContent=stale?"Market closed/delayed; live signal paused":"EMA 9 "+fmt(e9)+" · EMA 21 "+fmt(e21);el("support-value").textContent=fmt(support);el("resistance-value").textContent=fmt(resistance);el("trend-value").textContent=bias;el("retest-value").textContent=one.length?"1-minute feed available":"Unavailable";el("entry-value").textContent="Wait for confirmation";el("risk-value").textContent=stale?"STALE DATA":"Feed validated";el("signal-value").textContent=stale||!one.length?"WAIT":"MONITOR";el("vwap-value").textContent="Volume-weighted session average requires valid session volume.";el("ema-value").textContent="EMA 9: "+fmt(e9)+" · EMA 21: "+fmt(e21);el("rsi-value").textContent=rv===null?"Not enough candles":"RSI (14): "+fmt(rv);chart(c);el("feed-status").textContent=stale?"● STALE DATA · SIGNALS PAUSED":"● UPSTOX FEED CONNECTED";el("feed-status").style.color=stale?"#f3cf73":"#a4ff3f"}catch(e){el("feed-status").textContent="● FEED ERROR";el("feed-status").style.color="#ff8292";el("bias-note").textContent=String(e.message||e);el("signal-value").textContent="WAIT";el("risk-value").textContent="Feed unavailable"}}
+const CACHE_KEY="mgrow:last-verified-nifty-feed:v1";
+function renderPayload(j,forceStale=false){
+ if(j.provider!=="upstox"||!j.data)throw Error("Unexpected feed response");
+ let c=(j.data.fiveMinuteCandles||[]).filter(x=>[x.open,x.high,x.low,x.close].every(v=>Number.isFinite(v)&&v>0)&&x.high>=Math.max(x.open,x.close,x.low)&&x.low<=Math.min(x.open,x.close,x.high));
+ let one=j.data.oneMinuteCandles||[];
+ if(c.length<22)throw Error("Not enough verified 5-minute candles");
+ let last=c[c.length-1],lastMs=Date.parse(last.timestamp),stale=forceStale||!Number.isFinite(lastMs)||Date.now()-lastMs>600000;
+ let cl=c.map(x=>x.close),e9=ema(cl.slice(-60),9),e21=ema(cl.slice(-80),21),rv=rsi(cl),support=Math.min(...c.slice(-20).map(x=>x.low)),resistance=Math.max(...c.slice(-20).map(x=>x.high)),bias=e9>e21?"BULLISH":e9<e21?"BEARISH":"NEUTRAL";
+ let lastText=Number.isFinite(lastMs)?new Date(lastMs).toLocaleString("en-IN",{timeZone:"Asia/Kolkata"}):"Time unavailable";
+ el("nifty-price").textContent=fmt(last.close);
+ el("nifty-time").textContent=(stale?"STALE DATA · Last updated: ":"Last updated: ")+lastText+" IST";
+ el("market-bias").textContent=stale?"PAUSED":bias;
+ el("bias-note").textContent=stale?"Market closed or feed delayed; live signals paused":"EMA 9 "+fmt(e9)+" · EMA 21 "+fmt(e21);
+ el("support-value").textContent=fmt(support);el("resistance-value").textContent=fmt(resistance);
+ el("trend-value").textContent=stale?"PAUSED":bias;
+ el("retest-value").textContent=stale?"PAUSED":(one.length?"1-minute feed available":"Unavailable");
+ el("entry-value").textContent=stale?"PAUSED · Await fresh candles":"Wait for confirmation";
+ el("risk-value").textContent=stale?"STALE DATA · No live analysis":"Feed validated";
+ el("signal-value").textContent=stale||!one.length?"WAIT":"MONITOR";
+ el("vwap-value").textContent=stale?"STALE DATA · Session VWAP not refreshed":"Volume-weighted session average requires valid session volume.";
+ el("ema-value").textContent=(stale?"STALE · ":"")+"EMA 9: "+fmt(e9)+" · EMA 21: "+fmt(e21);
+ el("rsi-value").textContent=rv===null?"Not enough candles":(stale?"STALE · ":"")+"RSI (14): "+fmt(rv);
+ chart(c);
+ el("feed-status").textContent=stale?"● STALE DATA · SIGNALS PAUSED": "● UPSTOX FEED CONNECTED";
+ el("feed-status").style.color=stale?"#f3cf73":"#a4ff3f";
+}
+async function refresh(){
+ try{
+  let r=await fetch(API_BASE+"/v1/nifty/candles",{headers:{Accept:"application/json"},cache:"no-store"});
+  if(!r.ok)throw Error("Feed HTTP "+r.status);
+  let j=await r.json();
+  renderPayload(j,false);
+  try{localStorage.setItem(CACHE_KEY,JSON.stringify(j));}catch(_){}
+ }catch(e){
+  try{
+   let saved=localStorage.getItem(CACHE_KEY);
+   if(saved){renderPayload(JSON.parse(saved),true);return;}
+  }catch(_){}
+  el("feed-status").textContent="● FEED ERROR · NO SAVED DATA";
+  el("feed-status").style.color="#ff8292";
+  el("bias-note").textContent=String(e.message||e);
+  el("nifty-time").textContent="No verified data saved in this browser yet";
+  el("signal-value").textContent="WAIT";
+  el("risk-value").textContent="Feed unavailable";
+ }
+}
 refresh();setInterval(refresh,30000);
 </script></body></html>
