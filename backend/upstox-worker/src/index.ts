@@ -19,7 +19,7 @@ export default {async fetch(req:Request,env:Env):Promise<Response>{
  try{
   if(u.pathname==="/v1/nifty/option-chain"){
    const expiry=u.searchParams.get("expiry_date")||"";
-   if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(expiry)||Number.isNaN(Date.parse(expiry))||new Date(expiry).toISOString().slice(0,10)!==expiry)return json({error:"invalid_expiry_date"},400);
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(expiry)||Number.isNaN(Date.parse(expiry))||new Date(expiry).toISOString().slice(0,10)!==expiry)return json({error:"invalid_expiry_date"},400);
    const p=await upstream("/v2/option/chain?instrument_key="+encodeURIComponent(NIFTY)+"&expiry_date="+encodeURIComponent(expiry),env.UPSTOX_ANALYTICS_TOKEN);
    if(p.status!=="success"||!Array.isArray(p.data))return json({error:"invalid_upstream_payload"},502);
    const rows=p.data.map((r:any)=>{const ce=r.call_options||{},pe=r.put_options||{},cm=ce.market_data||{},pm=pe.market_data||{},cg=ce.option_greeks||{},pg=pe.option_greeks||{};
