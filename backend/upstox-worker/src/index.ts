@@ -11,7 +11,10 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "x-content-type-options": "nosniff",
-    "referrer-policy": "no-referrer"
+    "referrer-policy": "no-referrer",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "Accept, Content-Type"
   }
 });
 async function upstream(path: string, token: string): Promise<any> {
@@ -39,6 +42,7 @@ function validExpiry(value: string): boolean {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, OPTIONS", "access-control-allow-headers": "Accept, Content-Type", "access-control-max-age": "86400" } });
     if (url.pathname === "/health" && request.method === "GET") {
       return json({ service: "mgrow-readonly", status: "ready" });
     }
