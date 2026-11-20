@@ -1,0 +1,27 @@
+name: Deploy MGrow read-only market feed
+
+on:
+  push:
+    branches:
+      - feature/mgrow-web-free-build200
+    paths:
+      - "backend/upstox-worker/**"
+      - ".github/workflows/deploy-mgrow-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Deploy read-only Upstox worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: backend/upstox-worker
+          command: deploy
