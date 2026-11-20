@@ -293,7 +293,6 @@ class MainActivity : FragmentActivity() {
             return
         }
         if (snapshot.fiveMinuteCandles.isEmpty() ||
-            snapshot.oneMinuteCandles.isEmpty() ||
             !snapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
             !snapshot.oneMinuteCandles.all(::isValidMarketCandle)
         ) {
@@ -537,6 +536,12 @@ class MainActivity : FragmentActivity() {
         setContentView(root)
         root.requestApplyInsets()
         showPage("Home")
+        val apiBaseUrl = BuildConfig.MGROW_API_BASE_URL.trim()
+        if (apiBaseUrl.isNotEmpty()) {
+            attachMarketDataFeed(UpstoxMarketDataFeed(apiBaseUrl))
+        } else {
+            updateFeedStatus(FeedConnectionState.OFFLINE, "Live data server URL is not configured.")
+        }
     }
 
     private fun showPage(page: String) {
