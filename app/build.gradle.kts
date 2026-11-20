@@ -24,7 +24,7 @@ android {
         targetSdk = 35
         versionCode = ciBuildNumber
         versionName = "1.0.$ciBuildNumber"
-        buildConfigField("String", "MGROW_API_BASE_URL", "\"${System.getenv(\"MGROW_API_BASE_URL\") ?: \"\"}\"")
+        buildConfigField("String", "MGROW_API_BASE_URL", "\"${System.getenv("MGROW_API_BASE_URL") ?: ""}\"")
     }
 
     signingConfigs {
