@@ -5,9 +5,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Standalone Smart AI Analyser calculation model.
- * Uses its own candle type and calculations; it does not call the existing
- * TechnicalAnalysis, SignalEngine, or OptionChainCalculationEngine.
+ * Smart AI analyser: combines its own 5m/1m candle calculations with
+ * validated live option-chain metrics supplied by the caller.
  */
 data class SmartAnalyserCandle(
     val timestampMillis: Long,
@@ -69,6 +68,7 @@ object SmartAiOptionChainAnalyser {
         val bias = when {
             bull5 && last1.close > prev1.high && pcr != null && pcr >= 1.10 -> SmartAnalyserBias.BULLISH
             bear5 && last1.close < prev1.low && pcr != null && pcr <= 0.90 -> SmartAnalyserBias.BEARISH
+            pcr == null -> SmartAnalyserBias.WAIT
             else -> SmartAnalyserBias.SIDEWAYS
         }
         if (optionChain == null || pcr == null) {
@@ -87,7 +87,8 @@ object SmartAiOptionChainAnalyser {
         val explanation = when (bias) {
             SmartAnalyserBias.BULLISH -> "5m bullish structure, 1m breakout and PCR bullish confirmation. Analysis only; not an order."
             SmartAnalyserBias.BEARISH -> "5m bearish structure, 1m breakdown and PCR bearish confirmation. Analysis only; not an order."
-            else -> "5m conditions and 1m confirmation are not aligned; wait for a clearer setup."
+            SmartAnalyserBias.WAIT -> "Live option-chain confirmation is missing; no directional result is issued."
+            SmartAnalyserBias.SIDEWAYS -> "5m conditions, 1m confirmation and option-chain PCR are not aligned; wait for a clearer setup."
         }
         return SmartAnalyserResult(
             bias, confidence, ema9, ema21, rsi, vwap,
