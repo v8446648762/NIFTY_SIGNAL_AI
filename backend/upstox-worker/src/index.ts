@@ -1,3 +1,4 @@
+import { handleOptionChainRequest } from "./option-chain";
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
@@ -44,6 +45,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   if (url.pathname === "/health" && request.method === "GET") {
     return json({ service: "mgrow-upstox-proxy", status: "ready", brokerConnected: false });
+  }
+
+  if (url.pathname === "/v1/nifty/option-expiries" || url.pathname === "/v1/nifty/option-chain") {
+    return handleOptionChainRequest(request, url, env);
   }
 
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
