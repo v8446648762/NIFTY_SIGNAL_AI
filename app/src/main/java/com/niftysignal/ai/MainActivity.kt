@@ -1378,10 +1378,16 @@ class MainActivity : FragmentActivity() {
         }
         val five = snapshot.fiveMinuteCandles.map { SmartAnalyserCandle(it.timestampMillis, it.open, it.high, it.low, it.close, it.volume) }
         val one = snapshot.oneMinuteCandles.map { SmartAnalyserCandle(it.timestampMillis, it.open, it.high, it.low, it.close, it.volume) }
-        val result = SmartAiOptionChainAnalyser.analyse(five, one)
+        val spot = snapshot.fiveMinuteCandles.lastOrNull()?.close
+        val chainMetrics = snapshot.optionChain.takeIf { it.isNotEmpty() }?.let { rows ->
+            runCatching { OptionChainCalculationEngine.calculate(rows, spot) }.getOrNull()
+        }
+        val result = SmartAiOptionChainAnalyser.analyse(five, one, chainMetrics)
         val biasColor = when (result.bias) { SmartAnalyserBias.BULLISH -> green; SmartAnalyserBias.BEARISH -> red; else -> amber }
         box.addView(text(result.bias.name, 26f, biasColor, true))
         box.addView(text("Confidence score: " + result.confidencePercent + "% (calculation score, not win probability)", 10f, muted))
+        box.addView(text("LIVE OPTION CHAIN PCR: " + (chainMetrics?.pcr?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "Unavailable"), 12f, cyan, true))
+        box.addView(text("Max CE OI: " + (chainMetrics?.highestCallOiStrike?.let(::formatMarketValue) ?: "—") + "  •  Max PE OI: " + (chainMetrics?.highestPutOiStrike?.let(::formatMarketValue) ?: "—"), 10f, muted))
         addGap(box, 10)
         listOf("EMA 9" to result.ema9, "EMA 21" to result.ema21, "RSI 14" to result.rsi14, "VWAP" to result.vwap, "Support" to result.support, "Resistance" to result.resistance).forEach { (label, value) ->
             box.addView(text(label + ": " + (value?.let(::formatMarketValue) ?: "—"), 12f, white))
@@ -1390,7 +1396,7 @@ class MainActivity : FragmentActivity() {
         box.addView(text(result.oneMinuteConfirmation, 12f, cyan, true))
         box.addView(text(result.explanation, 11f, muted))
         result.warnings.forEach { box.addView(text(it, 10f, amber)) }
-        box.addView(text("This analyser is separate from the existing SignalEngine and Option Chain calculations. Analysis only; no orders are placed.", 10f, amber))
+        box.addView(text("This analyser combines live 5m/1m candles with live option-chain PCR and OI. Analysis only; no orders are placed.", 10f, amber))
         return box
     }
     private fun buildIndicators(): View {
