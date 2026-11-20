@@ -52,7 +52,7 @@ class UpstoxMarketDataFeed(
             val expiryArray = expiryResponse.optJSONArray("data") ?: JSONArray()
             val today = LocalDate.now()
             val expiry = (0 until expiryArray.length())
-                .mapNotNull { expiryArray.optString(it).takeIf(String::isNotBlank) }
+                .mapNotNull { expiryArray.optString(it).takeIf { value -> value.isNotBlank() } }
                 .mapNotNull { value -> runCatching { LocalDate.parse(value) }.getOrNull() }
                 .filter { !it.isBefore(today) }
                 .minOrNull()
@@ -62,6 +62,9 @@ class UpstoxMarketDataFeed(
             val chainArray = chainResponse.optJSONArray("data") ?: JSONArray()
             val contracts = parseOptionChain(chainArray)
             if (five.isEmpty()) throw IllegalStateException("Upstox returned no valid 5-minute candles.")
+            if (System.currentTimeMillis() - five.last().timestampMillis > 10 * 60 * 1000L) {
+                throw IllegalStateException("stale: latest NIFTY 5-minute candle is older than 10 minutes.")
+            }
             if (contracts.isEmpty()) throw IllegalStateException("Upstox returned no valid option-chain strikes.")
 
             target.onSnapshot(
