@@ -39,7 +39,7 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                     // 1m/5m candle endpoints do not need to be polled every 15 seconds.
                     val quoteResponse = getJson("/v1/nifty/quote")
                     val now = System.currentTimeMillis()
-                    if (oneMinute.isEmpty() || fiveMinute.isEmpty() ||
+                    if (lastCandleFetchAt == 0L ||
                         now - lastCandleFetchAt >= CANDLE_REFRESH_INTERVAL_MS) {
                         val candleResponse = getJson("/v1/nifty/candles")
                         val candleData = candleResponse.optJSONObject("data")
@@ -49,8 +49,9 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                         if (newFiveMinute.isEmpty()) {
                             throw IllegalStateException("Upstox returned no 5-minute candles")
                         }
-                        // Keep 5m analysis live even when Upstox temporarily rate-limits 1m.
-                        if (newOneMinute.isNotEmpty()) oneMinute = newOneMinute
+                        // Never retain old 1m candles when the latest response is empty:
+                        // that would make an old snapshot look current.
+                        oneMinute = newOneMinute
                         fiveMinute = newFiveMinute
                         lastCandleFetchAt = now
                     }
@@ -60,6 +61,33 @@ class UpstoxMarketDataFeed(workerBaseUrl: String) : MarketDataFeed {
                     val lastPrice = quote.optDouble("last_price", Double.NaN)
                     if (!lastPrice.isFinite() || lastPrice <= 0.0) {
                         throw IllegalStateException("NIFTY quote price is invalid")
+                    }
+                    val quoteTimestamp = runCatching {
+                        OffsetDateTime.parse(quote.optString("timestamp"))
+                            .toInstant().toEpochMilli()
+                    }.getOrNull()
+                    val checkedAt = System.currentTimeMillis()
+                    if (quoteTimestamp == null ||
+                        !MarketDataFreshness.isFresh(quoteTimestamp, checkedAt, MarketDataFreshness.MAX_QUOTE_AGE_MS)) {
+                        listener.onStatusChanged(
+                            FeedConnectionState.STALE,
+                            "Latest NIFTY quote is stale; waiting for a fresh quote."
+                        )
+                        delay(POLL_INTERVAL_MS)
+                        continue
+                    }
+                    val latestOneMinute = oneMinute.lastOrNull()?.timestampMillis
+                    val latestFiveMinute = fiveMinute.lastOrNull()?.timestampMillis
+                    if (latestOneMinute == null ||
+                        !MarketDataFreshness.isFresh(latestOneMinute, checkedAt, MarketDataFreshness.MAX_1M_AGE_MS) ||
+                        latestFiveMinute == null ||
+                        !MarketDataFreshness.isFresh(latestFiveMinute, checkedAt, MarketDataFreshness.MAX_5M_AGE_MS)) {
+                        listener.onStatusChanged(
+                            FeedConnectionState.STALE,
+                            "Connected, but latest 1m/5m candles are stale or unavailable; waiting for fresh candles."
+                        )
+                        delay(POLL_INTERVAL_MS)
+                        continue
                     }
                     val previousClose = quote.optDouble("prev_close_price", Double.NaN)
                         ?.takeIf { it.isFinite() && it > 0.0 }
