@@ -4,6 +4,9 @@ plugins {
 }
 
 val ciBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+// Keep the requested display version while ensuring Android can install this
+// build over the previously distributed 1.0.201 build (versionCode 201).
+val androidVersionCode = maxOf(ciBuildNumber, 202)
 
 android {
     namespace = "com.niftysignal.ai"
@@ -22,8 +25,8 @@ android {
         applicationId = "com.niftysignal.ai"
         minSdk = 23
         targetSdk = 35
-        versionCode = ciBuildNumber
-        versionName = "1.0.$ciBuildNumber"
+        versionCode = androidVersionCode
+        versionName = "1.0.200"
     }
 
     signingConfigs {
