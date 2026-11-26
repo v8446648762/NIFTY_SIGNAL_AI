@@ -1186,9 +1186,27 @@ class MainActivity : FragmentActivity() {
                 snapshot.receivedAtMillis
             )
         }
-        val available = report.availableCount
+        val visibleDetections = report.detections.filter { item ->
+            val requiredPanels = when (item.name) {
+                "Chart pattern detection" -> listOf(7)
+                "Auto support & resistance" -> listOf(6, 19)
+                "Smart money / volume spike" -> listOf(8, 9)
+                "Option chain & OI analysis" -> listOf(5)
+                "Fakeout detection" -> listOf(10)
+                "RSI divergence" -> listOf(4)
+                "Market sentiment & news" -> listOf(12, 15)
+                "AI risk & volatility" -> listOf(13, 14)
+                "Candlestick & scalping setup" -> listOf(11)
+                "AI master signal & market bias" -> listOf(2)
+                else -> emptyList()
+            }
+            requiredPanels.any { isProPanelEnabled(it) }
+        }
+        val available = visibleDetections.count { it.score != null }
+        val passed = visibleDetections.count { it.passed }
+        val failed = visibleDetections.count { it.failed }
         box.addView(text(
-            "PASSED ${report.passedCount}  •  FAILED ${report.failedCount}  •  UNAVAILABLE ${report.detections.size - available}",
+            "PASSED $passed  •  FAILED $failed  •  UNAVAILABLE ${visibleDetections.size - available}",
             11f, white, true
         ))
         box.addView(text(
@@ -1196,7 +1214,10 @@ class MainActivity : FragmentActivity() {
             9f, muted
         ))
         addGap(box, 8)
-        report.detections.forEach { item ->
+        if (visibleDetections.isEmpty()) {
+            box.addView(text("सर्व AI detection panels Settings मध्ये बंद आहेत.", 10f, muted))
+        }
+        visibleDetections.forEach { item ->
             val status = when {
                 item.score == null -> "DATA UNAVAILABLE"
                 item.score >= 60 -> "PASSED • ${item.score}%"
