@@ -388,6 +388,27 @@ class MainActivity : FragmentActivity() {
         if (::dayLowValueView.isInitialized) dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
+        if (!snapshot.isStale) {
+            val report = AdvancedAiAnalytics.evaluate(
+                snapshot.fiveMinuteCandles,
+                snapshot.oneMinuteCandles,
+                snapshot.receivedAtMillis
+            )
+            val reportJson = org.json.JSONObject().apply {
+                put("capturedAt", report.capturedAtMillis)
+                put("detections", org.json.JSONArray().apply {
+                    report.detections.forEach { item ->
+                        put(org.json.JSONObject().apply {
+                            put("name", item.name)
+                            if (item.score == null) put("score", org.json.JSONObject.NULL) else put("score", item.score)
+                            put("detail", item.detail)
+                        })
+                    }
+                })
+            }
+            getSharedPreferences("mgrow_ai_reports", MODE_PRIVATE).edit()
+                .putString("latest_detection_report", reportJson.toString()).apply()
+        }
         if (!snapshot.isStale) recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
         val intelligence = if (snapshot.isStale) null else MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles)
         val nextCandle = NextFiveMinuteCandleEngine.evaluate(
@@ -1002,6 +1023,53 @@ class MainActivity : FragmentActivity() {
         val ce = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_CE.name }
         val pe = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_PE.name }
         val wait = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.WAIT.name }
+        val aiReportCard = card()
+        aiReportCard.addView(text("SMART AI PERFORMANCE REPORT", 12f, cyan, true)); addGap(aiReportCard, 6)
+        val savedAiReport = getSharedPreferences("mgrow_ai_reports", MODE_PRIVATE)
+            .getString("latest_detection_report", null)
+        if (savedAiReport == null) {
+            aiReportCard.addView(text("ताजा validated live NIFTY data मिळाल्यावर report तयार होईल.", 11f, muted))
+        } else {
+            try {
+                val reportJson = org.json.JSONObject(savedAiReport)
+                val items = reportJson.optJSONArray("detections") ?: org.json.JSONArray()
+                var passed = 0
+                var failed = 0
+                var available = 0
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    if (!item.isNull("score")) {
+                        available++
+                        if (item.optInt("score") >= 60) passed++ else failed++
+                    }
+                }
+                aiReportCard.addView(text("PASSED $passed  •  FAILED $failed  •  DATA UNAVAILABLE ${items.length() - available}", 11f, white, true))
+                aiReportCard.addView(text("Pass score: ${if (available == 0) 0 else passed * 100 / available}%  •  Rule: 60% and above Passed", 10f, muted))
+                addGap(aiReportCard, 7)
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    val name = item.optString("name")
+                    val score = if (item.isNull("score")) null else item.optInt("score")
+                    val status = when {
+                        score == null -> "DATA UNAVAILABLE"
+                        score >= 60 -> "✓ PASSED • $score%"
+                        else -> "✕ FAILED • $score%"
+                    }
+                    val tint = when {
+                        score == null -> amber
+                        score >= 60 -> green
+                        else -> red
+                    }
+                    aiReportCard.addView(text("$name  —  $status", 10f, tint, true))
+                    aiReportCard.addView(text(item.optString("detail"), 9f, muted))
+                    addGap(aiReportCard, 4)
+                }
+                aiReportCard.addView(text("हे heuristic detection scores आहेत; verified win-rate किंवा trade probability नाहीत. OI आणि News साठी स्वतंत्र verified data जोडलेले नसल्यास ते unavailable राहतील.", 9f, amber))
+            } catch (_: Exception) {
+                aiReportCard.addView(text("AI report वाचता आला नाही. पुढील fresh update ची प्रतीक्षा करा.", 10f, amber))
+            }
+        }
+        root.addView(aiReportCard); addGap(root, 12)
         val summary = card()
         summary.addView(text("AI SIGNAL HISTORY", 11f, cyan, true)); addGap(summary, 7)
         summary.addView(text(signals.length().toString(), 30f, white, true)); summary.addView(text("Recorded signal changes", 10f, muted)); addGap(summary, 10)
