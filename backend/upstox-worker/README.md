@@ -1,34 +1,46 @@
-# MGrow Upstox read-only backend (scaffold)
+# MGrow Upstox read-only backend
 
-This is an isolated Cloudflare Worker scaffold. It is not deployed and is not yet connected to the Android app.
+This isolated Cloudflare Worker is a development scaffold. It is not deployed and is not connected to the Android app.
 
 ## Endpoints
 - `GET /health`: worker status only; does not contact Upstox.
-- `GET /v1/nifty/quote`: fixed NIFTY 50 index LTP request using Upstox Analytics Token.
+- `GET /v1/nifty/quote`: fixed NIFTY 50 index LTP request using Upstox Full Market Quotes V3 with the Upstox Analytics Token. Requires a Google ID token in the Authorization Bearer header.\n- `GET /v1/nifty/candles`: fixed NIFTY 50 intraday OHLCV candles for 1-minute and 5-minute intervals using Upstox Historical Candle V3. Requires the same Google ID token; returns chronological, validated candles and no user-selectable instrument or timeframe.
 
-## Configure secrets (never commit token values)
-Use Cloudflare Workers secrets:
-```sh
-npx wrangler secret put UPSTOX_ANALYTICS_TOKEN
-npx wrangler secret put MGROW_CLIENT_KEY
-```
-Use a unique random client key. Never place the Upstox token in Android source, APK, GitHub, screenshots, or chat.
+## Server-side configuration
+Configure these values only in the Cloudflare Worker environment:
+- Secret: `UPSTOX_ANALYTICS_TOKEN` (Upstox Analytics Token)
+- Variable: `GOOGLE_CLIENT_ID` (OAuth client ID for the Android app)
+- Variable: `MGROW_ALLOWED_GOOGLE_EMAIL` (the one Google account allowed to access this personal app)
 
-## Deploy only after reviewing Upstox terms and access
-```sh
-npx wrangler deploy
-```
+Never commit token values or put them in Android source, APKs, screenshots, chat, or public GitHub content.
 
-## Test
-```sh
-curl https://YOUR-WORKER.workers.dev/health
-curl -H "x-mgrow-client-key: YOUR_CLIENT_KEY" https://YOUR-WORKER.workers.dev/v1/nifty/quote
-```
+## Current safeguards
+- Fixed GET routes only; no arbitrary proxy, order, portfolio, or account endpoints.
+- Upstox token remains server-side; response caching disabled.
+- Google ID tokens are checked server-side: RS256 signature against Google's published signing keys, issuer, exact client audience, expiry, issued-at time, verified email, and the configured owner email.
+- Google signing keys are cached in the Worker isolate according to Google's cache headers.
+- Upstream request timeout, strict NIFTY quote payload validation, and the Upstox Full Market Quotes V3 endpoint. Quote timestamps are required, must parse, and must be no more than 60 seconds old or 5 seconds in the future.
+- Cloudflare Rate Limiting binding is required for both quote and candle access; it keys requests to the verified owner email, uses a 30-request / 60-second window, returns HTTP 429 with Retry-After when exceeded, and fails closed if the limiter is unavailable.
+- Cloudflare's built-in rate limit is approximate and counted independently per Cloudflare location; it is an abuse-control layer, not a strict global quota.
+- Generic upstream error responses; authorization headers and tokens are not logged or forwarded.
 
-## Security notes
-- This worker is not deployed by this repository workflow.
-- The Upstox credential remains server-side in Cloudflare Secrets.
-- The client key is an additional gate, not a substitute for strong user authentication; any key embedded in a mobile app can potentially be extracted. Before production use, add a stronger access-control/rate-limiting layer and keep the endpoint private to the account owner.
-- Responses are not cached. Only fixed GET routes are accepted; no arbitrary URL proxy, POST, order, portfolio, or account routes are exposed.
-- Never log authorization headers or tokens.
-- This scaffold does not itself validate exchange timestamps or produce trading signals. Android must reject missing/stale/invalid market data before analysis.
+## Cloudflare Git build configuration
+For this monorepo, set the Workers Build **Root directory** to `backend/upstox-worker`.
+- Build command: `npm run build`
+- Deploy command: `npm run deploy`
+- The Cloudflare Worker project name must exactly match `mgrow-upstox-readonly` from `wrangler.toml`.
+- The rate-limit `namespace_id` is a positive integer unique within this Cloudflare account. The current value `1001` is a valid example if it is not already used by another rate-limit binding in this account; it is not a separate resource that must be provisioned.
+
+Do not select Save and Deploy until the settings and server-side secrets have been reviewed and the remaining production blockers below are resolved.
+
+## Production blockers
+- The Android Google Credential Manager login flow is not connected.
+- The Google OAuth client ID and allowed owner email still need to be configured securely.
+- The Worker rejects Full Market Quotes V3 snapshots with missing, invalid, older-than-60-second, or more-than-5-second-future response timestamps. This is a snapshot freshness guard, not proof that the last trade itself occurred recently.
+- Review Upstox API terms and permissions for the intended personal research/data display use before live deployment.
+- Monitoring and alerting are not configured.
+- No live Upstox request has been verified from the deployed Worker.\n- The candle endpoint has parser and authentication tests, but still requires an activated Upstox account/token and a deployed Worker for live verification.
+- Do not deploy publicly until the remaining blockers are implemented and reviewed.
+
+## Deployment status
+Not deployed. No Android integration. No Main Dashboard files changed. No live-data test has been performed.

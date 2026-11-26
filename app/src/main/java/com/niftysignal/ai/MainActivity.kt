@@ -3,6 +3,10 @@ package com.niftysignal.ai
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.app.AlertDialog
 import android.Manifest
 import android.app.Notification
@@ -143,6 +147,9 @@ class MainActivity : FragmentActivity() {
     private var openPaperTrade: PaperTrade? = null
     private val paperHistory = mutableListOf<String>()
     private var marketDataFeed: MarketDataFeed? = null
+    private var liveConnectionStatusView: TextView? = null
+    private var liveConnectButton: Button? = null
+    private var liveDisconnectButton: Button? = null
     private var latestSnapshot: MarketDataSnapshot? = null
     private var currentPage = "Home"
     private var lastAiSignalKey: String? = null
@@ -179,11 +186,32 @@ class MainActivity : FragmentActivity() {
 
     private val marketFeedListener = object : MarketDataFeed.Listener {
         override fun onStatusChanged(status: FeedConnectionState, message: String?) {
-            runOnUiThread { updateFeedStatus(status, message) }
+            runOnUiThread {
+                try {
+                    updateFeedStatus(status, message)
+                } catch (error: Throwable) {
+                    android.util.Log.e("MGrowMarketFeed", "Failed to update feed status", error)
+                    runCatching {
+                        Toast.makeText(this@MainActivity, "MGrow feed status error: ${error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
         }
 
         override fun onSnapshot(snapshot: MarketDataSnapshot) {
-            runOnUiThread { applyMarketSnapshot(snapshot) }
+            runOnUiThread {
+                try {
+                    applyMarketSnapshot(snapshot)
+                } catch (error: Throwable) {
+                    android.util.Log.e("MGrowMarketFeed", "Failed to apply live market snapshot", error)
+                    runCatching {
+                        updateFeedStatus(FeedConnectionState.ERROR, "Live data received, but dashboard update failed: ${error.javaClass.simpleName}")
+                    }
+                    runCatching {
+                        Toast.makeText(this@MainActivity, "MGrow dashboard error: ${error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
         }
     }
 
@@ -197,7 +225,13 @@ class MainActivity : FragmentActivity() {
         marketDataFeed?.disconnect()
         marketDataFeed = feed
         updateFeedStatus(FeedConnectionState.CONNECTING, "Connecting to market data")
-        feed.connect(marketFeedListener)
+        try {
+            feed.connect(marketFeedListener)
+        } catch (error: Throwable) {
+            android.util.Log.e("MGrowMarketFeed", "Failed to start market data feed", error)
+            marketDataFeed = null
+            updateFeedStatus(FeedConnectionState.ERROR, "Could not start live data: ${error.javaClass.simpleName}")
+        }
     }
 
     fun detachMarketDataFeed() {
@@ -213,6 +247,24 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun updateFeedStatus(status: FeedConnectionState, message: String? = null) {
+        // Reflect the real asynchronous Worker result on the Settings screen too.
+        liveConnectionStatusView?.let { statusView ->
+            statusView.text = message ?: when (status) {
+                FeedConnectionState.LIVE -> "NIFTY live data received."
+                FeedConnectionState.CONNECTING -> "Connecting to NIFTY read-only live data..."
+                FeedConnectionState.STALE -> "Live data is stale."
+                FeedConnectionState.ERROR -> "Live data connection failed."
+                FeedConnectionState.OFFLINE -> "Live data disconnected."
+            }
+        }
+        liveConnectButton?.let { button ->
+            button.text = when (status) {
+                FeedConnectionState.CONNECTING -> "CONNECTING..."
+                FeedConnectionState.LIVE -> "LIVE DATA CONNECTED"
+                else -> "CONNECT NIFTY LIVE DATA"
+            }
+        }
+        liveDisconnectButton?.isEnabled = status == FeedConnectionState.CONNECTING || status == FeedConnectionState.LIVE
         if (::feedStatusView.isInitialized) {
             val color = when (status) {
                 FeedConnectionState.LIVE -> green
@@ -293,9 +345,9 @@ class MainActivity : FragmentActivity() {
             return
         }
         if (snapshot.fiveMinuteCandles.isEmpty() ||
-            snapshot.oneMinuteCandles.isEmpty() ||
             !snapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
-            !snapshot.oneMinuteCandles.all(::isValidMarketCandle)
+            (snapshot.oneMinuteCandles.isNotEmpty() &&
+                !snapshot.oneMinuteCandles.all(::isValidMarketCandle))
         ) {
             updateFeedStatus(FeedConnectionState.ERROR, "Feed returned empty or invalid OHLCV candles.")
             return
@@ -304,13 +356,44 @@ class MainActivity : FragmentActivity() {
         latestSnapshot = snapshot
         updateFeedStatus(FeedConnectionState.LIVE, null)
 
+        // Keep the feed connected when a snapshot arrives on Settings or another
+        // page; Home-only dashboard views are initialized lazily by showPage("Home").
+        // Settings can connect the feed before the Home dashboard is built.
+        // Do not touch ANY lazily-created dashboard view until every required
+        // lateinit view has been initialized by showPage("Home").
+        if (!::indexPriceView.isInitialized ||
+            !::indexHintView.isInitialized ||
+            !::changeValueView.isInitialized ||
+            !::dayHighValueView.isInitialized ||
+            !::dayLowValueView.isInitialized ||
+            !::signalBiasView.isInitialized ||
+            !::signalStatusView.isInitialized ||
+            !::signalTrendValueView.isInitialized ||
+            !::signalSetupValueView.isInitialized ||
+            !::signalConfirmValueView.isInitialized ||
+            !::signalReasonView.isInitialized ||
+            !::vwapValueView.isInitialized ||
+            !::ema9ValueView.isInitialized ||
+            !::ema21ValueView.isInitialized ||
+            !::rsiValueView.isInitialized ||
+            !::supportValueView.isInitialized ||
+            !::resistanceValueView.isInitialized ||
+            !::chart.isInitialized ||
+            !::chartModePill.isInitialized ||
+            !::chartModeNoteView.isInitialized
+        ) {
+            android.util.Log.d("MGrowMarketFeed", "Live snapshot cached; Home dashboard views are not initialized yet")
+            return
+        }
+
         val latest = snapshot.fiveMinuteCandles.last()
-        indexPriceView.text = formatMarketValue(latest.close)
-        indexHintView.text = "Latest validated 5-minute NIFTY candle • Feed received just now"
+        val currentPrice = snapshot.lastPrice?.takeIf { it.isFinite() && it > 0.0 } ?: latest.close
+        indexPriceView.text = formatMarketValue(currentPrice)
+        indexHintView.text = "Live NIFTY quote • 1m/5m candles validated"
 
         val previousClose = snapshot.previousClose?.takeIf { it.isFinite() && it > 0.0 }
         if (previousClose != null) {
-            val change = latest.close - previousClose
+            val change = currentPrice - previousClose
             val percent = change / previousClose * 100.0
             changeValueView.text = String.format(java.util.Locale.US, "%+.2f (%.2f%%)", change, percent)
             changeValueView.setTextColor(if (change >= 0.0) green else red)
@@ -327,7 +410,7 @@ class MainActivity : FragmentActivity() {
         dayLowValueView.text = formatMarketValue(dayLow)
 
         val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
-        recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
+        recordAiSignal(decision, currentPrice, snapshot.receivedAtMillis)
         val biasText = when (decision.bias) {
             TradeBias.BUY_CE -> "BUY CE"
             TradeBias.BUY_PE -> "BUY PE"
@@ -356,12 +439,15 @@ class MainActivity : FragmentActivity() {
         }
         signalReasonView.text = decision.reasons.joinToString("\n") + "\n" + marathiReason
 
-        vwapValueView.text = formatMarketValue(decision.indicators.vwap)
-        ema9ValueView.text = formatMarketValue(decision.indicators.ema9)
-        ema21ValueView.text = formatMarketValue(decision.indicators.ema21)
-        rsiValueView.text = formatMarketValue(decision.indicators.rsi14)
-        supportValueView.text = formatMarketValue(decision.indicators.support)
-        resistanceValueView.text = formatMarketValue(decision.indicators.resistance)
+        // Calculate technical indicators from validated 5m candles independently
+        // of optional 1m confirmation data. AI setup remains WAIT until 1m confirms.
+        val indicatorValues = SignalEngine.calculate(snapshot.fiveMinuteCandles)
+        vwapValueView.text = formatMarketValue(indicatorValues.vwap)
+        ema9ValueView.text = formatMarketValue(indicatorValues.ema9)
+        ema21ValueView.text = formatMarketValue(indicatorValues.ema21)
+        rsiValueView.text = formatMarketValue(indicatorValues.rsi14)
+        supportValueView.text = formatMarketValue(indicatorValues.support)
+        resistanceValueView.text = formatMarketValue(indicatorValues.resistance)
 
         val visibleCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
         chart.setCandles(visibleCandles)
@@ -544,6 +630,14 @@ class MainActivity : FragmentActivity() {
         when (page) {
             "Home" -> {
                 pageContent.addView(buildHomeDashboard())
+                // A live snapshot may arrive while the user is on Settings.
+                // Re-render it only after all Home dashboard views are initialized.
+                latestSnapshot?.let { snapshot ->
+                    runCatching { applyMarketSnapshot(snapshot) }
+                        .onFailure { error ->
+                            android.util.Log.e("MGrowMarketFeed", "Failed to render cached snapshot on Home", error)
+                        }
+                }
             }
             "Chart" -> {
                 pageContent.addView(buildHeader())
@@ -1092,6 +1186,32 @@ class MainActivity : FragmentActivity() {
         startActivity(Intent.createChooser(send, "Share MGrow report data"))
     }
 
+    private fun beginLiveDataConnection(statusView: TextView, connectButton: Button, clearButton: Button) {
+        val workerUrl = getString(R.string.mgrow_worker_base_url).trim().trimEnd('/')
+        if (!workerUrl.startsWith("https://")) {
+            statusView.text = "Secure MGrow Worker URL is not configured."
+            return
+        }
+        liveConnectionStatusView = statusView
+        liveConnectButton = connectButton
+        liveDisconnectButton = clearButton
+        connectButton.isEnabled = false
+        try {
+            attachMarketDataFeed(UpstoxMarketDataFeed(workerUrl))
+            statusView.text = "Connecting to NIFTY read-only live data..."
+            connectButton.text = "CONNECTING..."
+            clearButton.isEnabled = true
+        } catch (error: Throwable) {
+            android.util.Log.e("MGrowMarketFeed", "Connect button failed", error)
+            statusView.text = "Live data connection failed: ${error.javaClass.simpleName}"
+            runCatching {
+                Toast.makeText(this, "Live data error: ${error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+            }
+        } finally {
+            connectButton.isEnabled = true
+        }
+    }
+
     private fun buildSettings(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
@@ -1109,6 +1229,35 @@ class MainActivity : FragmentActivity() {
             row.addView(text(subtitle, 11f, muted))
             return row
         }
+
+        section(root, "NIFTY LIVE DATA CONNECTION")
+        val authStatus = text(
+            "Fingerprint is only for local app lock. Live market data connects separately through the secure read-only server.",
+            12f, muted
+        )
+        root.addView(authStatus)
+        lateinit var clearSession: Button
+        val connectButton = Button(this).apply {
+            text = "CONNECT NIFTY LIVE DATA"
+            setOnClickListener { beginLiveDataConnection(authStatus, this, clearSession) }
+        }
+        root.addView(connectButton)
+        clearSession = Button(this).apply {
+            text = "DISCONNECT LIVE DATA"
+            isEnabled = marketDataFeed != null
+            setOnClickListener {
+                detachMarketDataFeed()
+                authStatus.text = "Live data disconnected. Fingerprint app lock remains separate."
+                connectButton.text = "CONNECT NIFTY LIVE DATA"
+                isEnabled = false
+            }
+        }
+        root.addView(clearSession)
+        root.addView(text(
+            "Read-only NIFTY data only. Upstox token stays on the secure server; no order placement. Data endpoint is public and rate-limited.",
+            10f, amber
+        ))
+        addGap(root, 12)
 
         val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
         root.addView(settingRow(
@@ -1217,7 +1366,7 @@ class MainActivity : FragmentActivity() {
         titleCol.addView(text("AI NIFTY OPTIONS TERMINAL", 9f, cyan, true))
         wrap.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         wrap.addView(buildDateTimeView())
-        wrap.addView(pill("●  DEMO MODE", amber))
+        wrap.addView(pill("●  READ-ONLY MODE", cyan))
         return wrap
     }
 
@@ -1310,6 +1459,20 @@ class MainActivity : FragmentActivity() {
         addGap(box, 7)
         chartModeNoteView = text("SIMULATED PREVIEW  •  LIVE FEED NOT CONNECTED", 10f, amber)
         box.addView(chartModeNoteView)
+
+        // The feed may have delivered its first snapshot while the user was
+        // on Settings. A newly-created Chart page must render that cached data
+        // immediately instead of leaving the sample preview visible.
+        latestSnapshot?.let { snapshot ->
+            val liveCandles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
+            if (liveCandles.isNotEmpty()) {
+                chart.setCandles(liveCandles)
+                chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
+                chartModePill.setTextColor(green)
+                chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
+                chartModeNoteView.setTextColor(green)
+            }
+        }
         return box
     }
 
