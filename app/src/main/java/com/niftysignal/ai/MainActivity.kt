@@ -1294,6 +1294,7 @@ class MainActivity : FragmentActivity() {
         metrics.addView(metric("WAIT", wait.toString(), amber), LinearLayout.LayoutParams(0, -2, 1f))
         metrics.addView(metric("CONFIRMED", confirmed.toString(), cyan), LinearLayout.LayoutParams(0, -2, 1f))
         summary.addView(metrics); root.addView(summary); addGap(root, 12)
+        root.addView(buildSignalActivityCalendar(signals)); addGap(root, 12)
         val history = card(); history.addView(text("RECENT AI SIGNALS", 11f, cyan, true)); addGap(history, 8)
         if (signals.length() == 0) history.addView(text("No validated live AI signals recorded yet.", 12f, muted))
         else {
@@ -1316,6 +1317,113 @@ class MainActivity : FragmentActivity() {
         root.addView(note)
         root.addView(text("AI signal history is not a verified win-rate report. Manual entries are user-entered records only.", 10f, muted))
         return root
+    }
+
+    private fun buildSignalActivityCalendar(signals: org.json.JSONArray): View {
+        val prefs = getSharedPreferences("mgrow_report_ui", MODE_PRIVATE)
+        val month = java.util.Calendar.getInstance().apply {
+            timeInMillis = prefs.getLong("calendar_month", System.currentTimeMillis())
+            set(java.util.Calendar.DAY_OF_MONTH, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val keyFormat = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+        val counts = HashMap<String, Int>()
+        for (i in 0 until signals.length()) {
+            val item = signals.optJSONObject(i) ?: continue
+            val time = item.optLong("time", 0L)
+            if (time > 0L) {
+                val key = keyFormat.format(java.util.Date(time))
+                counts[key] = (counts[key] ?: 0) + 1
+            }
+        }
+        val box = card()
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val monthLabel = text(
+            java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(month.time),
+            14f, white, true
+        )
+        val previous = Button(this).apply {
+            text = "‹"
+            setOnClickListener {
+                month.add(java.util.Calendar.MONTH, -1)
+                prefs.edit().putLong("calendar_month", month.timeInMillis).apply()
+                showPage("Reports")
+            }
+        }
+        val next = Button(this).apply {
+            text = "›"
+            setOnClickListener {
+                month.add(java.util.Calendar.MONTH, 1)
+                prefs.edit().putLong("calendar_month", month.timeInMillis).apply()
+                showPage("Reports")
+            }
+        }
+        heading.addView(previous, LinearLayout.LayoutParams(dp(46), dp(42)))
+        heading.addView(monthLabel, LinearLayout.LayoutParams(0, -2, 1f).apply {
+            leftMargin = dp(8); rightMargin = dp(8)
+        })
+        heading.addView(next, LinearLayout.LayoutParams(dp(46), dp(42)))
+        box.addView(text("MONTHLY SIGNAL ACTIVITY", 11f, cyan, true))
+        addGap(box, 5)
+        box.addView(heading)
+        addGap(box, 5)
+        val weekdays = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
+            weekdays.addView(text(day, 10f, muted, true).apply { gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(0, dp(24), 1f))
+        }
+        box.addView(weekdays)
+        val firstWeekday = month.get(java.util.Calendar.DAY_OF_WEEK) - 1
+        val daysInMonth = month.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+        var dayNumber = 1
+        while (dayNumber <= daysInMonth) {
+            val week = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for (column in 0..6) {
+                if (dayNumber == 1 && column < firstWeekday || dayNumber > daysInMonth) {
+                    week.addView(View(this), LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                        setMargins(dp(2), dp(2), dp(2), dp(2))
+                    })
+                } else {
+                    val date = month.clone() as java.util.Calendar
+                    date.set(java.util.Calendar.DAY_OF_MONTH, dayNumber)
+                    val key = keyFormat.format(date.time)
+                    val count = counts[key] ?: 0
+                    val cell = text(
+                        if (count > 0) "$dayNumber\n$count" else dayNumber.toString(),
+                        9f, if (count > 0) green else muted, count > 0
+                    ).apply {
+                        gravity = Gravity.CENTER
+                        setPadding(dp(2), dp(3), dp(2), dp(3))
+                        background = rounded(surface2, if (count > 0) green else border, 8)
+                        isClickable = true
+                        setOnClickListener {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "\${java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(date.time)} • $count recorded AI signals",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    week.addView(cell, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                        setMargins(dp(2), dp(2), dp(2), dp(2))
+                    })
+                    dayNumber++
+                }
+            }
+            box.addView(week)
+        }
+        addGap(box, 5)
+        box.addView(text(
+            "Calendar shows the count of saved AI signal changes per date only. It does not label signals as wins/losses or calculate trading accuracy.",
+            9f, amber
+        ))
+        return box
     }
 
     private fun showManualTradeDialog() {
