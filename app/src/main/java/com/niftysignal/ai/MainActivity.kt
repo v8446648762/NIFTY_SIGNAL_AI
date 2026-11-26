@@ -962,7 +962,7 @@ class MainActivity : FragmentActivity() {
 
     private fun buildEntryRiskTargetCard(): View {
         val box = card()
-        box.addView(text("AI-GENERATED REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
+        box.addView(text("RULE-BASED AI REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
         val snap = latestSnapshot; val candles = snap?.fiveMinuteCandles.orEmpty()
         val decision = if (snap != null && !snap.isStale && candles.isNotEmpty()) SignalEngine.evaluate(candles, snap.oneMinuteCandles) else null
         if (snap == null || snap.isStale || decision == null || !decision.confirmed || decision.bias == TradeBias.WAIT) {
