@@ -506,12 +506,25 @@ class MainActivity : FragmentActivity() {
             setStroke(dp(1), stroke)
         }
 
+    private fun selectedTypeface(style: Int): Typeface {
+        val selected = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
+            .getString("font_family", "Roboto") ?: "Roboto"
+        val family = when (selected) {
+            "Times New Roman", "Georgia", "Garamond", "Baskerville", "Playfair Display",
+            "Bodoni", "Merriweather", "Rockwell", "Arvo", "Roboto Slab", "Clarendon" -> "serif"
+            "Fira Code", "JetBrains Mono", "Courier New" -> "monospace"
+            "Pacifico", "Lobster", "Dancing Script", "Brush Script", "Caveat" -> "cursive"
+            else -> "sans-serif"
+        }
+        return Typeface.create(family, style)
+    }
+
     private fun text(s: String, size: Float = 14f, color: Int = white, bold: Boolean = false): TextView =
         TextView(this).apply {
             text = s
             textSize = size
             setTextColor(color)
-            if (bold) typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            typeface = selectedTypeface(if (bold) Typeface.BOLD else Typeface.NORMAL)
             setPadding(0, dp(2), 0, dp(2))
         }
 
@@ -1569,11 +1582,32 @@ class MainActivity : FragmentActivity() {
         )
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
-            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  10 display themes"
+            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  30 display themes"
         ) {
             AlertDialog.Builder(this).setTitle("Choose app theme")
                 .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Midnight"))) { dialog, which ->
                     prefs.edit().putString("theme", themes[which]).apply()
+                    dialog.dismiss()
+                    recreate()
+                }.setNegativeButton("Cancel", null).show()
+        })
+        addGap(root, 10)
+        val fontOptions = arrayOf(
+            "Helvetica", "Arial", "Inter", "Roboto", "Montserrat", "Poppins", "Futura",
+            "Open Sans", "Lato", "Times New Roman", "Georgia", "Garamond", "Baskerville",
+            "Playfair Display", "Bodoni", "Merriweather", "Rockwell", "Arvo", "Roboto Slab",
+            "Clarendon", "Pacifico", "Lobster", "Dancing Script", "Brush Script", "Caveat",
+            "Fira Code", "JetBrains Mono", "Courier New", "Bebas Neue"
+        )
+        root.addView(settingRow(
+            if (isMarathi()) "फॉन्ट शैली" else "Font Style",
+            (prefs.getString("font_family", "Roboto") ?: "Roboto") +
+                "  •  29 styles (device may use the closest system font)"
+        ) {
+            val currentFont = prefs.getString("font_family", "Roboto") ?: "Roboto"
+            AlertDialog.Builder(this).setTitle("Choose font style")
+                .setSingleChoiceItems(fontOptions, fontOptions.indexOf(currentFont)) { dialog, which ->
+                    prefs.edit().putString("font_family", fontOptions[which]).apply()
                     dialog.dismiss()
                     recreate()
                 }.setNegativeButton("Cancel", null).show()
