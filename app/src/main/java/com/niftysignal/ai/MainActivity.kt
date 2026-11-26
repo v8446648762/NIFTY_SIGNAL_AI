@@ -884,10 +884,40 @@ class MainActivity : FragmentActivity() {
     private fun applySavedAppearance() {
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
         when (prefs.getString("theme", "MGrow Neon")) {
-            "Pure Black", "MGrow Neon" -> {
+            "Premium Black Glass", "Pure Black", "MGrow Neon" -> {
                 bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
                 surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
                 muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
+            }
+            "Futuristic AI", "Cyber Neon" -> {
+                bg = Color.rgb(7, 9, 24); surface = Color.rgb(18, 22, 48)
+                surface2 = Color.rgb(27, 32, 68); border = Color.rgb(76, 91, 190)
+                muted = Color.rgb(190, 198, 235); white = Color.rgb(248, 249, 255)
+            }
+            "Bloomberg Terminal", "Carbon Fiber" -> {
+                bg = Color.rgb(15, 17, 20); surface = Color.rgb(32, 35, 40)
+                surface2 = Color.rgb(43, 47, 53); border = Color.rgb(112, 103, 77)
+                muted = Color.rgb(205, 205, 195); white = Color.rgb(255, 250, 230)
+            }
+            "Angel One Inspired", "Ocean Blue" -> {
+                bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
+                surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
+                muted = Color.rgb(195, 220, 235); white = Color.WHITE
+            }
+            "Minimal Pro", "Graphite" -> {
+                bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
+                surface2 = Color.rgb(48, 54, 66); border = Color.rgb(95, 105, 125)
+                muted = Color.rgb(210, 215, 225); white = Color.WHITE
+            }
+            "Blue Ocean Glass", "Blue Glass", "TradingView Inspired" -> {
+                bg = Color.rgb(13, 24, 45); surface = Color.argb(226, 28, 43, 69)
+                surface2 = Color.argb(238, 40, 61, 96); border = Color.argb(220, 88, 151, 220)
+                muted = Color.rgb(190, 211, 238); white = Color.rgb(248, 251, 255)
+            }
+            "Luxury Gold" -> {
+                bg = Color.rgb(18, 16, 12); surface = Color.rgb(39, 34, 25)
+                surface2 = Color.rgb(54, 46, 31); border = Color.rgb(166, 130, 55)
+                muted = Color.rgb(220, 205, 170); white = Color.rgb(255, 247, 225)
             }
             "Ocean Blue" -> {
                 bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
@@ -1269,7 +1299,11 @@ class MainActivity : FragmentActivity() {
             return row
         }
 
-        val themes = arrayOf("MGrow Neon", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
+        val themes = arrayOf(
+            "Premium Black Glass", "Futuristic AI", "Bloomberg Terminal",
+            "Angel One Inspired", "Cyber Neon", "Minimal Pro",
+            "Blue Ocean Glass", "Carbon Fiber", "TradingView Inspired", "Luxury Gold"
+        )
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
             (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  5 display themes"
@@ -1280,6 +1314,173 @@ class MainActivity : FragmentActivity() {
                     dialog.dismiss()
                     recreate()
                 }.setNegativeButton("Cancel", null).show()
+        })
+        addGap(root, 12)
+        section(root, "MGROW PRO • PANEL LIBRARY", "20 DASHBOARD PANELS")
+        root.addView(text(
+            "Choose which panels should be included in your planned dashboard layout. These preferences are saved locally; dashboard placement is being built separately.",
+            10f, muted
+        ))
+        addGap(root, 6)
+        root.addView(Switch(this).apply {
+            text = "Live Market Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_1", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_1", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "AI Master Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_2", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_2", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Advanced Chart Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_3", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_3", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Indicator Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_4", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_4", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Option Chain Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_5", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_5", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Support Resistance Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_6", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_6", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Pattern Scanner Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_7", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_7", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Volume Intelligence Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_8", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_8", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Smart Money Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_9", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_9", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Fakeout Detection Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_10", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_10", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Scalping Setup Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_11", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_11", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Market Sentiment Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_12", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_12", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Volatility Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_13", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_13", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "AI Risk Meter Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_14", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_14", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "News Intelligence Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_15", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_15", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Alert Center Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_16", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_16", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Multi-Timeframe Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_17", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_17", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "AI Performance Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_18", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_18", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "Market Levels Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_19", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_19", checked).apply()
+            }
+        })
+        root.addView(Switch(this).apply {
+            text = "System Health Panel"
+            setTextColor(white)
+            isChecked = prefs.getBoolean("pro_panel_20", true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("pro_panel_20", checked).apply()
+            }
         })
         addGap(root, 9)
         val accents = arrayOf("Cyan", "Violet", "Blue", "Green", "Orange", "Red", "Pink", "Gold", "Teal")
