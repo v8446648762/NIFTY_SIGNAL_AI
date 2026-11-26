@@ -19,7 +19,8 @@ function finiteNonNegative(value: unknown): number | null {
 }
 
 function optionalGreek(options: Record<string, unknown> | null, key: string): number | null {
-  return finiteNonNegative(options?.[key]);
+  const value = options?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export function validateOptionExpiry(value: string | null): string | null {
