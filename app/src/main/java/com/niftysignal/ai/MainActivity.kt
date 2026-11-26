@@ -644,6 +644,16 @@ class MainActivity : FragmentActivity() {
             "Home" -> pageContent.addView(buildHomeDashboard())
             "Market" -> {
                 pageContent.addView(buildHeader()); addGap(pageContent, 12)
+                val optionChainButton = Button(this).apply {
+                    text = "LIVE OPTION CHAIN • NIFTY"
+                    setTextColor(Color.BLACK)
+                    setBackgroundColor(cyan)
+                    setOnClickListener {
+                        startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java))
+                    }
+                }
+                pageContent.addView(optionChainButton, LinearLayout.LayoutParams(-1, dp(48)))
+                addGap(pageContent, 12)
                 section(pageContent, "LIVE MARKET TERMINAL", "NIFTY 50")
                 pageContent.addView(buildChartCard()); addGap(pageContent, 14)
                 section(pageContent, "TECHNICAL STUDIES", "LIVE INDICATORS")
