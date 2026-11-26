@@ -6,11 +6,12 @@ This Worker serves only fixed NIFTY 50 market data to the Build 157 Android adap
 - `GET /health`: Worker readiness only; it does not verify Upstox connectivity.
 - `GET /v1/nifty/candles`: Upstox V3 intraday 5-minute candles plus optional 1-minute candles.
 - `GET /v1/nifty/quote`: fixed NIFTY 50 quote endpoint for diagnostics.
+- `GET /v1/nifty/option-chain?expiry_date=current_week`: isolated fixed NIFTY 50 option-chain snapshot. Supported expiry values: `current_week`, `next_week`, `far_week`, `current_month`, `next_month`, `far_month`, or an explicit `YYYY-MM-DD` date.
 
 ## Public access and safeguards
 The market endpoints do not require Google login or app authentication, as approved for this personal read-only integration. Anyone who discovers the URL can request the same fixed NIFTY 50 data. Cloudflare rate limiting is keyed by the connecting client IP (30 requests per 60 seconds). Cloudflare rate limits are approximate and distributed by data-center location, so they are an abuse-control measure, not a hard global quota. Monitor usage and disable the Worker if unexpected traffic appears.
 
-Only GET requests and fixed NIFTY 50 instrument paths are accepted. The caller cannot select arbitrary instruments, timeframes, or Upstox routes. Responses use no-store headers. Upstream requests have timeouts and strict payload validation. The candle response is cached inside each Worker isolate for up to 55 seconds to reduce upstream requests. A failed optional 1-minute request does not interrupt the 5-minute feed.
+Only GET requests and fixed NIFTY 50 instrument paths are accepted. The option-chain route is separate from the existing quote/candle handlers and calls only Upstox `/v2/option/chain`; it cannot select another underlying or call any order endpoint. The caller cannot select arbitrary instruments, timeframes, or Upstox routes. Responses use no-store headers. Upstream requests have timeouts and strict payload validation. The candle response is cached inside each Worker isolate for up to 55 seconds to reduce upstream requests. A failed optional 1-minute request does not interrupt the 5-minute feed. The option-chain route has its own request validation and does not modify quote/candle polling or cache behavior.
 
 ## Configure the broker token
 In the Cloudflare dashboard, open Worker `mgrow-upstox-readonly` → Settings → Variables and Secrets. Add `UPSTOX_ANALYTICS_TOKEN` as an encrypted **Secret**, not a plain variable. Never commit the token or put it in Android source, APKs, screenshots, chat, or public GitHub content.
@@ -26,4 +27,4 @@ Before deploying, confirm the Cloudflare rate-limit binding named `QUOTE_LIMITER
 Build 157 already has `UpstoxWorkerMarketDataFeed`, which polls the configured HTTPS Worker endpoint every 20 seconds, validates provider and completed candles, and marks stale data rather than generating signals from stale candles. The adapter endpoint must match the deployed Worker URL. No broker token is present in Android.
 
 ## Trading scope
-Analysis and alerts only. No automatic order placement. Validate market-data entitlement and Upstox API terms before production use. A successful CI build does not prove the Worker is deployed or receiving live Upstox data.
+Analysis and alerts only. No automatic order placement. Validate market-data entitlement and Upstox API terms before production use. The Android option-chain screen polls the separate endpoint every 30 seconds and labels data as a recent API snapshot, not a tick-verified LIVE stream. Upstox REST option-chain responses do not provide a per-strike exchange timestamp, so the displayed fetch age is not proof of exchange-tick freshness. A successful CI build does not prove the Worker is deployed or receiving live Upstox data.
