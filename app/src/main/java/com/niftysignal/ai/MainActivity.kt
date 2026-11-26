@@ -753,6 +753,11 @@ class MainActivity : FragmentActivity() {
                 section(pageContent, "MGROW CONTROL CENTER", "PREFERENCES & SECURITY")
                 pageContent.addView(buildSettings())
             }
+            "Testing Lab" -> {
+                pageContent.addView(buildHeader()); addGap(pageContent, 12)
+                section(pageContent, "OFFLINE TESTING LAB", "DEMO DATA • LIVE FEED ISOLATED")
+                pageContent.addView(TestingLabScreen.create(this))
+            }
         }
         addGap(pageContent, 12)
         pageContent.addView(text("MGrow  /  ${page.uppercase()} SECTION", 10f, muted, true).apply {
@@ -1182,6 +1187,52 @@ class MainActivity : FragmentActivity() {
 
     private fun buildReports(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val manualTrades = loadReportRecords("manual_trades")
+        val manualPnl = (0 until manualTrades.length()).sumOf {
+            manualTrades.optJSONObject(it)?.optDouble("pnl", 0.0) ?: 0.0
+        }
+        val journal = card()
+        journal.addView(text("MANUAL TRADE JOURNAL", 12f, cyan, true))
+        addGap(journal, 5)
+        journal.addView(text(
+            "\${manualTrades.length()} saved entries  •  Gross P&L \${if (manualPnl >= 0.0) "+" else ""}\${formatMarketValue(manualPnl)}",
+            12f, if (manualPnl >= 0.0) green else red, true
+        ))
+        journal.addView(text("Manual record keeping only. This does not place, modify or close broker orders. Brokerage and taxes are not included in gross P&L.", 9f, amber))
+        addGap(journal, 8)
+        val journalActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val addTrade = Button(this).apply {
+            text = "ADD MANUAL ENTRY"
+            setOnClickListener { showManualTradeDialog() }
+        }
+        val export = Button(this).apply {
+            text = "EXPORT CSV"
+            setOnClickListener { shareReportsCsv() }
+        }
+        journalActions.addView(addTrade, LinearLayout.LayoutParams(0, dp(46), 1f))
+        journalActions.addView(export, LinearLayout.LayoutParams(0, dp(46), 1f))
+        journal.addView(journalActions)
+        if (manualTrades.length() == 0) {
+            addGap(journal, 5)
+            journal.addView(text("No manual trades recorded yet.", 10f, muted))
+        } else {
+            addGap(journal, 8)
+            journal.addView(text("RECENT MANUAL ENTRIES", 10f, muted, true))
+            val fmt = java.text.SimpleDateFormat("dd MMM, hh:mm a", java.util.Locale.getDefault())
+            for (i in manualTrades.length() - 1 downTo maxOf(0, manualTrades.length() - 5)) {
+                val trade = manualTrades.optJSONObject(i) ?: continue
+                val pnl = trade.optDouble("pnl", 0.0)
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                row.addView(text(trade.optString("side"), 10f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text("\${if (pnl >= 0.0) "+" else ""}\${formatMarketValue(pnl)}", 11f, if (pnl >= 0.0) green else red, true))
+                journal.addView(row)
+                journal.addView(text(
+                    "\${fmt.format(java.util.Date(trade.optLong("time")))} • Entry \${formatMarketValue(trade.optDouble("entry"))} • Exit \${formatMarketValue(trade.optDouble("exit"))} • Qty \${trade.optInt("qty")}",
+                    9f, muted
+                ))
+            }
+        }
+        root.addView(journal); addGap(root, 12)
         val signals = loadReportRecords("ai_signals")
         val confirmed = (0 until signals.length()).count { signals.optJSONObject(it)?.optBoolean("confirmed", false) == true }
         val ce = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_CE.name }
@@ -1263,7 +1314,7 @@ class MainActivity : FragmentActivity() {
         val note = card(); note.addView(text("STRATEGY REVIEW", 11f, cyan, true)); addGap(note, 5)
         note.addView(text("Signal history is an audit log, not a verified win-rate report. Backtesting and outcome tracking must include historical candles, brokerage, taxes and slippage before performance claims.", 10f, amber))
         root.addView(note)
-        root.addView(text("Manual Trade Journal is not included in this app structure.", 10f, muted))
+        root.addView(text("AI signal history is not a verified win-rate report. Manual entries are user-entered records only.", 10f, muted))
         return root
     }
 
@@ -1385,7 +1436,7 @@ class MainActivity : FragmentActivity() {
         )
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
-            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  5 display themes"
+            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  10 display themes"
         ) {
             AlertDialog.Builder(this).setTitle("Choose app theme")
                 .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Midnight"))) { dialog, which ->
@@ -1397,7 +1448,7 @@ class MainActivity : FragmentActivity() {
         addGap(root, 12)
         section(root, "MGROW PRO • PANEL LIBRARY", "20 DASHBOARD PANELS")
         root.addView(text(
-            "Choose which panels should be included in your planned dashboard layout. These preferences are saved locally; dashboard placement is being built separately.",
+            "These switches control the corresponding sections on Home, Market, and AI pages. Preferences are saved locally on this device.",
             10f, muted
         ))
         addGap(root, 6)
@@ -1633,6 +1684,11 @@ class MainActivity : FragmentActivity() {
         ))
         addGap(root, 12)
         section(root, if (isMarathi()) "इतर पर्याय" else "OTHER OPTIONS")
+        root.addView(settingRow(
+            if (isMarathi()) "ऑफलाइन टेस्टिंग लॅब" else "OFFLINE TESTING LAB",
+            "Sample candles and local Excel option-chain tests • never changes live feed"
+        ) { showPage("Testing Lab") })
+        addGap(root, 9)
         val keepAwake = Switch(this).apply {
             text = if (isMarathi()) "स्क्रीन चालू ठेवा" else "Keep screen awake"
             setTextColor(white)
