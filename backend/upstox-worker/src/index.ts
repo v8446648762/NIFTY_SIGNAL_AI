@@ -1,3 +1,4 @@
+import { extractValidOptionChain, fetchNiftyOptionChain, validateOptionExpiry } from "./option-chain.js";
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
@@ -45,7 +46,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
-  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles") return json({ error: "not_found" }, 404);
+  const isOptionChainPath = url.pathname === "/v1/nifty/option-chain";
+  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && !isOptionChainPath) return json({ error: "not_found" }, 404);
   if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "upstox_token_not_configured" }, 503);
   }
@@ -55,6 +57,34 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const rateLimit = await env.QUOTE_LIMITER.limit({ key: `nifty-readonly:${clientIp}` });
     if (!rateLimit.success) return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
+
+  if (isOptionChainPath) {
+    const expiry = validateOptionExpiry(url.searchParams.get("expiry_date"));
+    if (!expiry) return json({ error: "invalid_expiry_date" }, 400);
+    try {
+      const payload = await fetchNiftyOptionChain(expiry, env.UPSTOX_ANALYTICS_TOKEN);
+      const chain = extractValidOptionChain(payload);
+      if (!chain) return json({ error: "invalid_upstream_option_chain_payload" }, 502);
+      const receivedAtEpochMs = Date.now();
+      return json({
+        provider: "upstox",
+        instrumentKey: NIFTY_50_KEY,
+        expiryDate: chain.expiry,
+        receivedAt: new Date(receivedAtEpochMs).toISOString(),
+        receivedAtEpochMs,
+        spotPrice: chain.spotPrice,
+        strikes: chain.strikes,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return json({ error: "upstream_option_chain_timeout" }, 504);
+      }
+      if (error instanceof Error && error.message === "upstream_rate_limited") {
+        return json({ error: "upstream_rate_limited" }, 429, { "retry-after": "60" });
+      }
+      return json({ error: "upstream_option_chain_request_failed" }, 502);
+    }
+  }
 
   if (url.pathname === "/v1/nifty/candles") {
     const now = Date.now();
