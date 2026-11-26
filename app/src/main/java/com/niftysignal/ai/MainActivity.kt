@@ -1027,15 +1027,18 @@ class MainActivity : FragmentActivity() {
         box.addView(text("AUTOMATIC NIFTY DETECTIONS", 12f, cyan, true))
         addGap(box, 5)
         val snapshot = latestSnapshot
-        if (snapshot == null || snapshot.isStale) {
-            box.addView(text("ताजा validated LIVE candles मिळेपर्यंत AI detections थांबवले आहेत.", 11f, amber))
-            return box
+        val report = if (snapshot == null || snapshot.isStale) {
+            AdvancedAiAnalytics.unavailable(
+                System.currentTimeMillis(),
+                if (snapshot == null) "Waiting for the first validated live NIFTY snapshot." else "Latest market snapshot is stale; waiting for fresh validated candles."
+            )
+        } else {
+            AdvancedAiAnalytics.evaluate(
+                snapshot.fiveMinuteCandles,
+                snapshot.oneMinuteCandles,
+                snapshot.receivedAtMillis
+            )
         }
-        val report = AdvancedAiAnalytics.evaluate(
-            snapshot.fiveMinuteCandles,
-            snapshot.oneMinuteCandles,
-            snapshot.receivedAtMillis
-        )
         val available = report.availableCount
         box.addView(text(
             "PASSED ${report.passedCount}  •  FAILED ${report.failedCount}  •  UNAVAILABLE ${report.detections.size - available}",
