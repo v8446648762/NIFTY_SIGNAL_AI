@@ -1603,10 +1603,10 @@ class MainActivity : FragmentActivity() {
         )
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
-            (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  30 display themes"
+            (prefs.getString("theme", "Premium Black Glass") ?: "Premium Black Glass") + "  •  30 display themes"
         ) {
             AlertDialog.Builder(this).setTitle("Choose app theme")
-                .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Midnight"))) { dialog, which ->
+                .setSingleChoiceItems(themes, themes.indexOf(prefs.getString("theme", "Premium Black Glass"))) { dialog, which ->
                     prefs.edit().putString("theme", themes[which]).apply()
                     dialog.dismiss()
                     recreate()
