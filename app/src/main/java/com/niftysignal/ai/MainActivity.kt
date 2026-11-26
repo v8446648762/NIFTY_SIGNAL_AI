@@ -695,6 +695,8 @@ class MainActivity : FragmentActivity() {
                 pageContent.addView(buildNextCandleCard()); addGap(pageContent, 14)
                 section(pageContent, "AI RISK METER", "RISK ASSESSMENT")
                 pageContent.addView(buildRiskMeter()); addGap(pageContent, 14)
+                section(pageContent, "AI DETECTION CENTER", "10 LIVE MARKET CHECKS")
+                pageContent.addView(buildAiDetectionCenter()); addGap(pageContent, 14)
                 section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
                 pageContent.addView(buildAlerts())
             }
@@ -1013,6 +1015,56 @@ class MainActivity : FragmentActivity() {
         row.addView(metric("TARGET REF.", formatMarketValue(target), green), LinearLayout.LayoutParams(0, -2, 1f))
         box.addView(row); addGap(box, 7)
         box.addView(text("NIFTY index reference levels, not option premium. Indicative only; no order instruction or guaranteed outcome.", 9f, amber))
+        return box
+    }
+
+    /**
+     * Visible, read-only detection panel. It evaluates only the already validated
+     * snapshot; it does not create or modify any market-feed connection.
+     */
+    private fun buildAiDetectionCenter(): View {
+        val box = card()
+        box.addView(text("AUTOMATIC NIFTY DETECTIONS", 12f, cyan, true))
+        addGap(box, 5)
+        val snapshot = latestSnapshot
+        if (snapshot == null || snapshot.isStale) {
+            box.addView(text("ताजा validated LIVE candles मिळेपर्यंत AI detections थांबवले आहेत.", 11f, amber))
+            return box
+        }
+        val report = AdvancedAiAnalytics.evaluate(
+            snapshot.fiveMinuteCandles,
+            snapshot.oneMinuteCandles,
+            snapshot.receivedAtMillis
+        )
+        val available = report.availableCount
+        box.addView(text(
+            "PASSED ${report.passedCount}  •  FAILED ${report.failedCount}  •  UNAVAILABLE ${report.detections.size - available}",
+            11f, white, true
+        ))
+        box.addView(text(
+            "60% आणि त्यापेक्षा जास्त = PASSED  •  60% पेक्षा कमी = FAILED",
+            9f, muted
+        ))
+        addGap(box, 8)
+        report.detections.forEach { item ->
+            val status = when {
+                item.score == null -> "DATA UNAVAILABLE"
+                item.score >= 60 -> "PASSED • ${item.score}%"
+                else -> "FAILED • ${item.score}%"
+            }
+            val tint = when {
+                item.score == null -> amber
+                item.score >= 60 -> green
+                else -> red
+            }
+            box.addView(text("${item.name}  —  $status", 10f, tint, true))
+            box.addView(text(item.detail, 9f, muted))
+            addGap(box, 5)
+        }
+        box.addView(text(
+            "Scores हे heuristic analysis आहेत; नफ्याची शक्यता किंवा verified win-rate नाहीत. OI आणि News साठी verified data नसल्यास DATA UNAVAILABLE दाखवले जाईल.",
+            9f, amber
+        ))
         return box
     }
 
