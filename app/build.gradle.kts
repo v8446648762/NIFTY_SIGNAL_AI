@@ -3,8 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val ciBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-
 android {
     namespace = "com.niftysignal.ai"
     compileSdk = 35
@@ -22,7 +20,7 @@ android {
         applicationId = "com.niftysignal.ai"
         minSdk = 23
         targetSdk = 35
-        versionCode = ciBuildNumber
+        versionCode = 200
         versionName = "1.0.200"
     }
 
