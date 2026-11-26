@@ -643,55 +643,47 @@ class MainActivity : FragmentActivity() {
         when (page) {
             "Home" -> pageContent.addView(buildHomeDashboard())
             "Market" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 14)
-                section(pageContent, "LIVE MARKET CHART", "NIFTY 50")
-                pageContent.addView(buildChartCard())
-                addGap(pageContent, 18)
-                section(pageContent, "TECHNICAL ANALYTICS", "INDICATORS")
-                pageContent.addView(buildIndicators())
-                addGap(pageContent, 18)
-                section(pageContent, "MARKET LEVELS", "SUPPORT & RESISTANCE")
-                pageContent.addView(buildLevels())
-                addGap(pageContent, 18)
-                section(pageContent, "MARKET INTELLIGENCE", "PRICE ACTION & TREND")
+                pageContent.addView(buildHeader()); addGap(pageContent, 12)
+                section(pageContent, "LIVE MARKET TERMINAL", "NIFTY 50")
+                pageContent.addView(buildChartCard()); addGap(pageContent, 14)
+                section(pageContent, "TECHNICAL STUDIES", "LIVE INDICATORS")
+                pageContent.addView(buildIndicators()); addGap(pageContent, 14)
+                pageContent.addView(buildAdvancedMarketStudies()); addGap(pageContent, 14)
+                section(pageContent, "MARKET STRUCTURE", "KEY LEVELS")
+                pageContent.addView(buildLevels()); addGap(pageContent, 14)
+                section(pageContent, "MARKET INTELLIGENCE", "TREND & PRICE ACTION")
                 pageContent.addView(buildInsights())
             }
             "AI" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 14)
-                section(pageContent, "AI SIGNAL ENGINE", "CE / PE / WAIT")
-                pageContent.addView(buildSignalCard())
-                addGap(pageContent, 18)
-                section(pageContent, "SMART AI • NEXT 5M CANDLE", "GREEN / RED / WAIT")
-                pageContent.addView(buildNextCandleCard())
-                addGap(pageContent, 18)
-                section(pageContent, "AI TRADE RISK METER", "RISK ASSESSMENT")
-                pageContent.addView(buildRiskMeter())
-                addGap(pageContent, 18)
+                pageContent.addView(buildHeader()); addGap(pageContent, 12)
+                section(pageContent, "SMART AI SIGNAL ENGINE", "CE / PE / WAIT")
+                pageContent.addView(buildSignalCard()); addGap(pageContent, 14)
+                section(pageContent, "AI TRADE PLAN", "REFERENCE LEVELS ONLY")
+                pageContent.addView(buildEntryRiskTargetCard()); addGap(pageContent, 14)
+                section(pageContent, "NEXT 5-MINUTE CANDLE", "HEURISTIC ANALYSIS")
+                pageContent.addView(buildNextCandleCard()); addGap(pageContent, 14)
+                section(pageContent, "AI RISK METER", "RISK ASSESSMENT")
+                pageContent.addView(buildRiskMeter()); addGap(pageContent, 14)
                 section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
                 pageContent.addView(buildAlerts())
             }
             "Reports" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 14)
-                section(pageContent, "TRADING REPORTS", "MANUAL + AI PERFORMANCE")
+                pageContent.addView(buildHeader()); addGap(pageContent, 12)
+                section(pageContent, "AI PERFORMANCE", "SIGNAL HISTORY")
                 pageContent.addView(buildReports())
             }
             "Settings" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 14)
-                section(pageContent, "APP SETTINGS", "PERSONALIZE MGROW")
+                pageContent.addView(buildHeader()); addGap(pageContent, 12)
+                section(pageContent, "MGROW CONTROL CENTER", "PREFERENCES & SECURITY")
                 pageContent.addView(buildSettings())
             }
         }
         addGap(pageContent, 12)
-        pageContent.addView(text("MGrow  /  ${page.uppercase()} SECTION", 10f, muted, true).apply {
+        pageContent.addView(text("MGrow  /  \${page.uppercase()} SECTION", 10f, muted, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(12))
         })
         renderBottomNavigation()
-        // Re-render the latest validated snapshot into the visible page.
         latestSnapshot?.let { applyMarketSnapshot(it) }
     }
 
@@ -802,108 +794,54 @@ class MainActivity : FragmentActivity() {
 
     private fun buildHomeDashboard(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val brandRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        brandRow.addView(text("MGrow AI", 21f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
-        brandRow.addView(pill("Dashboard", green))
-        root.addView(brandRow)
-        addGap(root, 6)
-        root.addView(buildDateTimeView())
-        addGap(root, 16)
-        root.addView(text("NIFTY 50", 29f, white, true))
-        addGap(root, 5)
-        root.addView(text("Market Overview  •  Live data जोडल्यावर अपडेट", 13f, muted, true))
-        addGap(root, 18)
+        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brand.addView(text("MGrow", 25f, white, true))
+        brand.addView(text("SMART NIFTY TRADING TERMINAL", 9f, cyan, true))
+        top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(pill(if (latestSnapshot != null && latestSnapshot?.isStale == false) "● LIVE" else "● FEED WAIT",
+            if (latestSnapshot != null && latestSnapshot?.isStale == false) green else amber))
+        root.addView(top); addGap(root, 8); root.addView(buildDateTimeView()); addGap(root, 14)
 
-        fun feature(title: String, detail: String, symbol: String, destination: String): LinearLayout {
-            val glass = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
-                .getString("theme", "Midnight") == "Blue Glass"
-            val iconColor = if (glass) Color.rgb(104, 205, 255) else cyan
-            return LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), dp(14), dp(12), dp(14))
-                minimumHeight = dp(112)
-                background = if (glass) {
-                    GradientDrawable(
-                        GradientDrawable.Orientation.TL_BR,
-                        intArrayOf(Color.argb(242, 38, 65, 103), Color.argb(224, 24, 42, 70))
-                    ).apply {
-                        cornerRadius = dp(22).toFloat()
-                        setStroke(dp(1), Color.argb(190, 105, 174, 235))
-                    }
-                } else rounded(surface, border, 18)
-                elevation = if (glass) dp(7).toFloat() else dp(2).toFloat()
-                isClickable = true
-                isFocusable = true
-                contentDescription = "$title. $detail"
-                setOnClickListener { showPage(destination) }
+        val market = card().apply { background = rounded(Color.rgb(8, 22, 20), green, 20) }
+        market.addView(text("NIFTY 50  •  INDEX OVERVIEW", 10f, cyan, true)); addGap(market, 6)
+        val price = text(latestSnapshot?.fiveMinuteCandles?.lastOrNull()?.close?.let(::formatMarketValue) ?: "— — —", 32f, white, true)
+        indexPriceView = price; market.addView(price)
+        val hint = text(if (latestSnapshot == null) "Waiting for validated Upstox market data" else if (latestSnapshot?.isStale == true) "Last available data • NOT LIVE" else "Validated market snapshot received", 10f, muted)
+        indexHintView = hint; market.addView(hint); addGap(market, 10)
+        val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        metrics.addView(dynamicMetric("CHANGE", "—", muted) { changeValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(dynamicMetric("DAY HIGH", "—", white) { dayHighValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(dynamicMetric("DAY LOW", "—", white) { dayLowValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
+        market.addView(metrics); root.addView(market); addGap(root, 12)
 
-                val titleRow = LinearLayout(this@MainActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                }
-                val iconChip = TextView(this@MainActivity).apply {
-                    text = symbol
-                    textSize = 21f
-                    gravity = Gravity.CENTER
-                    setTextColor(iconColor)
-                    typeface = Typeface.create("sans-serif", Typeface.BOLD)
-                    background = GradientDrawable(
-                        GradientDrawable.Orientation.TL_BR,
-                        intArrayOf(Color.argb(115, 40, 145, 220), Color.argb(90, 91, 91, 205))
-                    ).apply {
-                        cornerRadius = dp(13).toFloat()
-                        setStroke(dp(1), Color.argb(145, 105, 190, 255))
-                    }
-                    layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply {
-                        rightMargin = dp(9)
-                    }
-                }
-                titleRow.addView(iconChip)
-                titleRow.addView(text(title, 15f, white, true))
-                addView(titleRow)
-                addView(View(this@MainActivity), LinearLayout.LayoutParams(1, dp(8)))
-                addView(text(detail, 12f, muted))
+        section(root, "MARKET PULSE", "LIVE VALIDATED DATA")
+        val pulse = card()
+        val signalRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        signalRow.addView(text("AI MARKET BIAS", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        val bias = text("WAIT", 17f, amber, true); signalBiasView = bias; signalRow.addView(bias)
+        pulse.addView(signalRow); addGap(pulse, 8)
+        val state = text(if (latestSnapshot == null) "Signals paused until fresh candles arrive" else if (latestSnapshot?.isStale == true) "Stale data detected • Signals paused" else "Market analysis active", 11f, muted)
+        signalReasonView = state; pulse.addView(state); root.addView(pulse); addGap(root, 12)
+
+        section(root, "QUICK TERMINAL", "OPEN WORKSPACE")
+        fun tile(title: String, subtitle: String, glyph: String, destination: String): View =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(13), dp(13), dp(13), dp(13)); background = rounded(surface, Color.argb(210, 0, 220, 170), 16)
+                isClickable = true; isFocusable = true; setOnClickListener { showPage(destination) }
+                addView(text(glyph, 22f, green, true), LinearLayout.LayoutParams(dp(42), -2))
+                val labels = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+                labels.addView(text(title, 14f, white, true)); labels.addView(text(subtitle, 10f, muted))
+                addView(labels, LinearLayout.LayoutParams(0, -2, 1f)); addView(text("›", 24f, cyan, true))
             }
-        }
-
-        fun addFeatureRow(left: View, right: View) {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.TOP
-            }
-            row.addView(left, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(7) })
-            row.addView(right, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(7) })
-            root.addView(row)
-            addGap(root, 10)
-        }
-
-        addFeatureRow(
-            feature("Market Overview", "Price, Trend, Chart", "↗", "Chart"),
-            feature("AI Signals", "CE / PE / WAIT", "✦", "AI")
-        )
-        addFeatureRow(
-            feature("Technical Analysis", "VWAP, EMA, RSI • Feed required", "⌁", "Tools"),
-            feature("Option Chain", "Planned after data integration", "⛓", "Chart")
-        )
-        addFeatureRow(
-            feature("AI Intelligence", "Filters activate with live candles", "◎", "AI"),
-            feature("Risk Manager", "Risk score • Live data required", "⬡", "AI")
-        )
-        val alertsTile = feature("Alerts", "Preferences ready • Triggers pending", "♧", "Alerts")
-        alertsTile.layoutParams = LinearLayout.LayoutParams(-1, -2)
-        root.addView(alertsTile)
-        addGap(root, 10)
-        val reportsTile = feature("Reports", "Manual Trades • AI Signals • Performance", "▤", "Reports")
-        reportsTile.layoutParams = LinearLayout.LayoutParams(-1, -2)
-        root.addView(reportsTile)
-        addGap(root, 10)
-        val note = text("Select a card or use the bottom navigation to open each section.", 11f, muted, true)
-        note.gravity = Gravity.CENTER
-        root.addView(note)
+        listOf(
+            Triple("MARKET TERMINAL", "Charts • Stochastic RSI • Volume Profile", "▥") to "Market",
+            Triple("SMART AI ENGINE", "Signals • Entry • Stop Loss • Targets", "✦") to "AI",
+            Triple("AI REPORTS", "Signal history • Strategy review", "▤") to "Reports",
+            Triple("SETTINGS", "Theme • Alerts • Security", "⚙") to "Settings"
+        ).forEach { (item, destination) -> root.addView(tile(item.first, item.second, item.third, destination)); addGap(root, 8) }
+        root.addView(text("ANALYSIS ONLY • READ-ONLY DATA • NO ORDER EXECUTION", 9f, amber, true).apply { gravity = Gravity.CENTER })
         return root
     }
 
@@ -912,11 +850,11 @@ class MainActivity : FragmentActivity() {
 
     private fun applySavedAppearance() {
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
-        when (prefs.getString("theme", "Midnight")) {
-            "Pure Black" -> {
-                bg = Color.rgb(0, 0, 0); surface = Color.rgb(18, 18, 22)
-                surface2 = Color.rgb(24, 27, 35); border = Color.rgb(70, 82, 105)
-                muted = Color.rgb(205, 215, 230); white = Color.WHITE
+        when (prefs.getString("theme", "MGrow Neon")) {
+            "Pure Black", "MGrow Neon" -> {
+                bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
+                surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
+                muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
             }
             "Ocean Blue" -> {
                 bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
@@ -924,12 +862,9 @@ class MainActivity : FragmentActivity() {
                 muted = Color.rgb(195, 220, 235); white = Color.WHITE
             }
             "Blue Glass" -> {
-                bg = Color.rgb(13, 24, 45)
-                surface = Color.argb(226, 28, 43, 69)
-                surface2 = Color.argb(238, 40, 61, 96)
-                border = Color.argb(220, 88, 151, 220)
-                muted = Color.rgb(190, 211, 238)
-                white = Color.rgb(248, 251, 255)
+                bg = Color.rgb(13, 24, 45); surface = Color.argb(226, 28, 43, 69)
+                surface2 = Color.argb(238, 40, 61, 96); border = Color.argb(220, 88, 151, 220)
+                muted = Color.rgb(190, 211, 238); white = Color.rgb(248, 251, 255)
             }
             "Graphite" -> {
                 bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
@@ -937,27 +872,20 @@ class MainActivity : FragmentActivity() {
                 muted = Color.rgb(210, 215, 225); white = Color.WHITE
             }
             else -> {
-                bg = Color.rgb(16, 24, 39); surface = Color.argb(224, 29, 43, 67)
-                surface2 = Color.argb(236, 36, 54, 83); border = Color.argb(210, 75, 101, 139)
-                muted = Color.rgb(195, 208, 226); white = Color.WHITE
+                bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
+                surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
+                muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
             }
         }
-        green = Color.rgb(0, 200, 150)
-        red = Color.rgb(255, 85, 119)
-        amber = Color.rgb(255, 200, 87)
+        green = Color.rgb(57, 255, 136); red = Color.rgb(255, 82, 105); amber = Color.rgb(255, 195, 70)
         cyan = when (prefs.getString("accent", "Cyan")) {
-            "Violet" -> Color.rgb(167, 110, 255)
-            "Blue" -> Color.rgb(65, 145, 255)
-            "Green" -> Color.rgb(0, 220, 145)
-            "Orange" -> Color.rgb(255, 145, 55)
-            "Red" -> Color.rgb(255, 75, 95)
-            "Pink" -> Color.rgb(255, 90, 180)
-            "Gold" -> Color.rgb(255, 195, 55)
-            "Teal" -> Color.rgb(0, 190, 180)
-            else -> Color.rgb(0, 213, 255)
+            "Violet" -> Color.rgb(167, 110, 255); "Blue" -> Color.rgb(65, 145, 255)
+            "Green" -> Color.rgb(57, 255, 136); "Orange" -> Color.rgb(255, 145, 55)
+            "Red" -> Color.rgb(255, 75, 95); "Pink" -> Color.rgb(255, 90, 180)
+            "Gold" -> Color.rgb(255, 195, 55); "Teal" -> Color.rgb(0, 220, 190)
+            else -> Color.rgb(0, 220, 255)
         }
     }
-
 
     private fun loadReportRecords(key: String): org.json.JSONArray {
         val raw = getSharedPreferences("mgrow_reports", MODE_PRIVATE).getString(key, "[]") ?: "[]"
@@ -987,103 +915,113 @@ class MainActivity : FragmentActivity() {
         saveReportRecords("ai_signals", records)
     }
 
+    private fun buildAdvancedMarketStudies(): View {
+        val box = card()
+        box.addView(text("ADVANCED INDICATOR STUDIES", 11f, cyan, true)); addGap(box, 8)
+        val candles = latestSnapshot?.fiveMinuteCandles.orEmpty()
+        val closes = candles.map { it.close }
+        val rsiValues = mutableListOf<Double>()
+        if (closes.size >= 15) for (end in 14 until closes.size) {
+            var gains = 0.0; var losses = 0.0
+            for (i in end - 13..end) { val d = closes[i] - closes[i - 1]; if (d > 0) gains += d else losses -= d }
+            val ag = gains / 14.0; val al = losses / 14.0
+            rsiValues.add(if (al == 0.0) 100.0 else 100.0 - 100.0 / (1.0 + ag / al))
+        }
+        val stoch = if (rsiValues.size >= 14) {
+            val w = rsiValues.takeLast(14); val lo = w.minOrNull() ?: 0.0; val hi = w.maxOrNull() ?: 0.0
+            if (hi > lo) (w.last() - lo) / (hi - lo) * 100.0 else 50.0
+        } else null
+        val sc = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(11), dp(12), dp(11)); background = rounded(surface2, border, 14)
+            addView(text("STOCHASTIC RSI (14,14)", 10f, muted, true))
+            addView(text(stoch?.let { String.format(java.util.Locale.US, "%.1f / 100", it) } ?: "DATA UNAVAILABLE", 20f,
+                stoch?.let { if (it >= 80) red else if (it <= 20) green else cyan } ?: amber, true))
+            addView(text(when { stoch == null -> "Requires at least 28 validated closing prices"; stoch >= 80 -> "Upper momentum zone • not a sell signal by itself"; stoch <= 20 -> "Lower momentum zone • not a buy signal by itself"; else -> "Mid-range momentum" }, 9f, muted))
+        }
+        box.addView(sc); addGap(box, 10)
+        box.addView(text("VOLUME PROFILE • CLOSE-BASED APPROXIMATION", 10f, muted, true))
+        val total = candles.sumOf { it.volume }
+        if (candles.isEmpty() || total <= 0.0) {
+            box.addView(text("Unavailable: validated candle volume is missing or zero.", 11f, amber))
+        } else {
+            val lo = candles.minOf { it.low }; val hi = candles.maxOf { it.high }; val step = ((hi - lo) / 12.0).takeIf { it > 0.0 } ?: 1.0
+            val bins = linkedMapOf<Int, Double>()
+            candles.forEach { c -> val k = ((c.close - lo) / step).toInt().coerceIn(0, 11); bins[k] = (bins[k] ?: 0.0) + c.volume }
+            val maxV = bins.values.maxOrNull() ?: 0.0
+            val pocKey = bins.maxByOrNull { it.value }?.key
+            val poc = pocKey?.let { lo + (it + 0.5) * step }
+            box.addView(text("Point of Control (approx.): \${formatMarketValue(poc)}", 15f, green, true))
+            bins.entries.sortedByDescending { it.value }.take(4).forEach { e ->
+                val level = lo + (e.key + 0.5) * step; val ratio = if (maxV > 0.0) e.value / maxV else 0.0
+                box.addView(text("\${formatMarketValue(level)}  •  " + "▰".repeat((ratio * 12).toInt().coerceAtLeast(1)), 10f, muted))
+            }
+            box.addView(text("Close-price buckets only; indicative, not exchange tick-level volume-at-price.", 9f, amber))
+        }
+        return box
+    }
+
+    private fun buildEntryRiskTargetCard(): View {
+        val box = card()
+        box.addView(text("AI-GENERATED REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
+        val snap = latestSnapshot; val candles = snap?.fiveMinuteCandles.orEmpty()
+        val decision = if (snap != null && !snap.isStale && candles.isNotEmpty()) SignalEngine.evaluate(candles, snap.oneMinuteCandles) else null
+        if (snap == null || snap.isStale || decision == null || decision.bias == TradeBias.WAIT) {
+            box.addView(text("WAIT • Fresh confirmed market conditions required.", 13f, amber, true))
+            box.addView(text("No entry, stop-loss or target while data is stale or setup is unconfirmed.", 10f, muted))
+            return box
+        }
+        val last = candles.last(); val ranges = candles.takeLast(14).map { it.high - it.low }.filter { it.isFinite() && it > 0.0 }
+        val vol = ranges.average().takeIf { it.isFinite() && it > 0.0 }
+        if (vol == null) { box.addView(text("Reference levels unavailable: insufficient volatility data.", 11f, amber)); return box }
+        val bull = decision.bias == TradeBias.BUY_CE; val entry = last.close
+        val stop = if (bull) entry - vol else entry + vol; val target = if (bull) entry + vol * 1.5 else entry - vol * 1.5
+        box.addView(text(if (bull) "BULLISH SETUP" else "BEARISH SETUP", 13f, if (bull) green else red, true)); addGap(box, 7)
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(metric("ENTRY REF.", formatMarketValue(entry)), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(metric("STOP REF.", formatMarketValue(stop), red), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(metric("TARGET REF.", formatMarketValue(target), green), LinearLayout.LayoutParams(0, -2, 1f))
+        box.addView(row); addGap(box, 7)
+        box.addView(text("NIFTY index reference levels, not option premium. Indicative only; no order instruction or guaranteed outcome.", 9f, amber))
+        return box
+    }
+
     private fun buildReports(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val manual = loadReportRecords("manual_trades")
         val signals = loadReportRecords("ai_signals")
-        var totalPnl = 0.0
-        var wins = 0
-        var losses = 0
-        for (i in 0 until manual.length()) {
-            val trade = manual.optJSONObject(i) ?: continue
-            val pnl = trade.optDouble("pnl", 0.0)
-            totalPnl += pnl
-            if (pnl > 0.0) wins++ else if (pnl < 0.0) losses++
-        }
-        val confirmed = (0 until signals.length()).count {
-            signals.optJSONObject(it)?.optBoolean("confirmed", false) == true
-        }
-        val ceCount = (0 until signals.length()).count {
-            signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_CE.name
-        }
-        val peCount = (0 until signals.length()).count {
-            signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_PE.name
-        }
-        val waitCount = (0 until signals.length()).count {
-            signals.optJSONObject(it)?.optString("bias") == TradeBias.WAIT.name
-        }
-
+        val confirmed = (0 until signals.length()).count { signals.optJSONObject(it)?.optBoolean("confirmed", false) == true }
+        val ce = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_CE.name }
+        val pe = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.BUY_PE.name }
+        val wait = (0 until signals.length()).count { signals.optJSONObject(it)?.optString("bias") == TradeBias.WAIT.name }
         val summary = card()
-        summary.addView(text("MANUAL TRADE PERFORMANCE", 11f, cyan, true))
-        addGap(summary, 5)
-        summary.addView(text(
-            String.format(java.util.Locale.US, "₹ %+.2f", totalPnl),
-            27f, if (totalPnl >= 0.0) green else red, true
-        ))
-        summary.addView(text("Gross P&L • before brokerage, taxes and slippage", 10f, muted))
-        addGap(summary, 10)
+        summary.addView(text("AI SIGNAL HISTORY", 11f, cyan, true)); addGap(summary, 7)
+        summary.addView(text(signals.length().toString(), 30f, white, true)); summary.addView(text("Recorded signal changes", 10f, muted)); addGap(summary, 10)
         val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        metrics.addView(metric("TRADES", manual.length().toString()), LinearLayout.LayoutParams(0, -2, 1f))
-        metrics.addView(metric("WINS", wins.toString(), green), LinearLayout.LayoutParams(0, -2, 1f))
-        metrics.addView(metric("LOSSES", losses.toString(), red), LinearLayout.LayoutParams(0, -2, 1f))
-        summary.addView(metrics)
-        root.addView(summary)
-        addGap(root, 12)
-
-        val addTrade = Button(this).apply {
-            text = if (isMarathi()) "＋ मॅन्युअल ट्रेड जोडा" else "＋ ADD MANUAL TRADE"
-            setOnClickListener { showManualTradeDialog() }
-        }
-        root.addView(addTrade, LinearLayout.LayoutParams(-1, dp(48)))
-        addGap(root, 12)
-
-        val aiCard = card()
-        aiCard.addView(text("AI SIGNAL PERFORMANCE LOG", 11f, cyan, true))
-        addGap(aiCard, 7)
-        aiCard.addView(text("Recorded signal changes: ${signals.length()}", 20f, white, true))
-        aiCard.addView(text(
-            "CE: $ceCount   •   PE: $peCount   •   WAIT: $waitCount   •   Confirmed: $confirmed",
-            11f, muted
-        ))
-        addGap(aiCard, 5)
-        aiCard.addView(text(
-            if (signals.length() == 0) "No validated live AI signals recorded yet. Sample chart signals are not included."
-            else "This is a signal log, not a win-rate report. Signal outcomes need subsequent validated market candles.",
-            10f, amber
-        ))
-        root.addView(aiCard)
-        addGap(root, 12)
-
-        val history = card()
-        history.addView(text("RECENT MANUAL TRADES", 11f, cyan, true))
-        addGap(history, 7)
-        if (manual.length() == 0) {
-            history.addView(text("No manual trades recorded yet.", 12f, muted))
-        } else {
-            val formatter = java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault())
-            for (i in manual.length() - 1 downTo maxOf(0, manual.length() - 10)) {
-                val trade = manual.optJSONObject(i) ?: continue
-                val side = trade.optString("side", "CE")
-                val pnl = trade.optDouble("pnl", 0.0)
-                val line = "$side • Qty ${trade.optInt("qty")} • Entry ₹${trade.optDouble("entry")} • Exit ₹${trade.optDouble("exit")} • P&L ₹${String.format(java.util.Locale.US, "%.2f", pnl)}"
-                history.addView(text(line, 11f, if (pnl >= 0.0) green else red, true))
-                history.addView(text(formatter.format(java.util.Date(trade.optLong("time"))), 9f, muted))
-                addGap(history, 5)
+        metrics.addView(metric("BUY CE", ce.toString(), green), LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(metric("BUY PE", pe.toString(), red), LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(metric("WAIT", wait.toString(), amber), LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(metric("CONFIRMED", confirmed.toString(), cyan), LinearLayout.LayoutParams(0, -2, 1f))
+        summary.addView(metrics); root.addView(summary); addGap(root, 12)
+        val history = card(); history.addView(text("RECENT AI SIGNALS", 11f, cyan, true)); addGap(history, 8)
+        if (signals.length() == 0) history.addView(text("No validated live AI signals recorded yet.", 12f, muted))
+        else {
+            val fmt = java.text.SimpleDateFormat("dd MMM, hh:mm a", java.util.Locale.getDefault())
+            for (i in signals.length() - 1 downTo maxOf(0, signals.length() - 15)) {
+                val item = signals.optJSONObject(i) ?: continue
+                val bias = item.optString("bias", "WAIT")
+                val tint = when (bias) { TradeBias.BUY_CE.name -> green; TradeBias.BUY_PE.name -> red; else -> amber }
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                row.addView(text(bias.replace("_", " "), 12f, tint, true), LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(text(formatMarketValue(item.optDouble("price", Double.NaN)), 12f, white, true))
+                history.addView(row)
+                history.addView(text(fmt.format(java.util.Date(item.optLong("time"))) + " • " + item.optString("trend", "Trend unavailable") + " • " + if (item.optBoolean("confirmed", false)) "Confirmed" else "Not confirmed", 9f, muted))
+                addGap(history, 6)
             }
         }
-        root.addView(history)
-        addGap(root, 12)
-
-        val export = Button(this).apply {
-            text = "SHARE REPORT DATA (CSV)"
-            setOnClickListener { shareReportsCsv() }
-        }
-        root.addView(export, LinearLayout.LayoutParams(-1, dp(48)))
-        addGap(root, 6)
-        root.addView(text(
-            "Reports are saved locally on this phone. Manual P&L is gross and does not include charges. AI signal accuracy will be calculated only after outcome tracking is implemented.",
-            10f, amber
-        ))
+        root.addView(history); addGap(root, 12)
+        val note = card(); note.addView(text("STRATEGY REVIEW", 11f, cyan, true)); addGap(note, 5)
+        note.addView(text("Signal history is an audit log, not a verified win-rate report. Backtesting and outcome tracking must include historical candles, brokerage, taxes and slippage before performance claims.", 10f, amber))
+        root.addView(note)
+        root.addView(text("Manual Trade Journal is not included in this app structure.", 10f, muted))
         return root
     }
 
