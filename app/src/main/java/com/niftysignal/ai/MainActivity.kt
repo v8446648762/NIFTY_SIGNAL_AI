@@ -641,17 +641,21 @@ class MainActivity : FragmentActivity() {
         currentPage = page
         pageContent.removeAllViews()
         when (page) {
-            "Home" -> {
-                pageContent.addView(buildHomeDashboard())
-            }
-            "Chart" -> {
+            "Home" -> pageContent.addView(buildHomeDashboard())
+            "Market" -> {
                 pageContent.addView(buildHeader())
                 addGap(pageContent, 14)
                 section(pageContent, "LIVE MARKET CHART", "NIFTY 50")
                 pageContent.addView(buildChartCard())
                 addGap(pageContent, 18)
+                section(pageContent, "TECHNICAL ANALYTICS", "INDICATORS")
+                pageContent.addView(buildIndicators())
+                addGap(pageContent, 18)
                 section(pageContent, "MARKET LEVELS", "SUPPORT & RESISTANCE")
                 pageContent.addView(buildLevels())
+                addGap(pageContent, 18)
+                section(pageContent, "MARKET INTELLIGENCE", "PRICE ACTION & TREND")
+                pageContent.addView(buildInsights())
             }
             "AI" -> {
                 pageContent.addView(buildHeader())
@@ -662,21 +666,9 @@ class MainActivity : FragmentActivity() {
                 section(pageContent, "SMART AI • NEXT 5M CANDLE", "GREEN / RED / WAIT")
                 pageContent.addView(buildNextCandleCard())
                 addGap(pageContent, 18)
-                section(pageContent, "MARKET INTELLIGENCE", "PRICE ACTION & TREND")
-                pageContent.addView(buildInsights())
-                addGap(pageContent, 18)
                 section(pageContent, "AI TRADE RISK METER", "RISK ASSESSMENT")
                 pageContent.addView(buildRiskMeter())
-            }
-            "Tools" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 14)
-                section(pageContent, "TECHNICAL ANALYTICS", "INDICATORS")
-                pageContent.addView(buildIndicators())
-            }
-            "Alerts" -> {
-                pageContent.addView(buildHeader())
-                addGap(pageContent, 14)
+                addGap(pageContent, 18)
                 section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
                 pageContent.addView(buildAlerts())
             }
@@ -699,7 +691,7 @@ class MainActivity : FragmentActivity() {
             setPadding(0, dp(8), 0, dp(12))
         })
         renderBottomNavigation()
-        // Refresh whichever live-data widgets exist on the newly opened page.
+        // Re-render the latest validated snapshot into the visible page.
         latestSnapshot?.let { applyMarketSnapshot(it) }
     }
 
@@ -707,28 +699,29 @@ class MainActivity : FragmentActivity() {
         bottomNav.removeAllViews()
         bottomNav.orientation = LinearLayout.HORIZONTAL
         bottomNav.gravity = Gravity.CENTER
-        bottomNav.setPadding(dp(6), dp(8), dp(6), dp(8))
-        bottomNav.background = rounded(Color.argb(245, 15, 27, 46), border, 18)
+        bottomNav.setPadding(dp(7), dp(8), dp(7), dp(8))
+        bottomNav.background = rounded(Color.argb(248, 10, 20, 36), border, 20)
         val items = listOf(
             Triple("Home", "⌂", if (isMarathi()) "होम" else "Home"),
-            Triple("Chart", "▥", if (isMarathi()) "चार्ट" else "Chart"),
+            Triple("Market", "▥", if (isMarathi()) "मार्केट" else "Market"),
             Triple("AI", "✦", "AI"),
-            Triple("Alerts", "♧", if (isMarathi()) "अलर्ट" else "Alerts"),
-            Triple("Tools", "⚙", if (isMarathi()) "टूल्स" else "Tools"),
-            Triple("Settings", "☷", if (isMarathi()) "सेटिंग" else "Settings")
+            Triple("Reports", "▤", if (isMarathi()) "रिपोर्ट" else "Reports"),
+            Triple("Settings", "⚙", if (isMarathi()) "सेटिंग" else "Settings")
         )
         items.forEach { item ->
             val selected = currentPage == item.first
             val tab = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(3), dp(3), dp(3), dp(3))
-                background = if (selected) rounded(Color.argb(70, 0, 213, 255), Color.argb(100, 0, 213, 255), 12) else null
+                setPadding(dp(4), dp(5), dp(4), dp(5))
+                background = if (selected)
+                    rounded(Color.argb(76, 0, 213, 255), Color.argb(145, 0, 213, 255), 14)
+                else null
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { showPage(item.first) }
             }
-            tab.addView(text(item.second, 19f, if (selected) cyan else muted, true).apply {
+            tab.addView(text(item.second, 20f, if (selected) cyan else muted, true).apply {
                 gravity = Gravity.CENTER
             })
             tab.addView(text(item.third, 9f, if (selected) cyan else muted, selected).apply {
