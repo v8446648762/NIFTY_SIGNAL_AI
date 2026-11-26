@@ -1,4 +1,4 @@
-import { extractValidOptionChain, fetchNiftyOptionChain, validateOptionExpiry } from "./option-chain";
+import { extractValidOptionChain, fetchNiftyOptionChain, validateOptionExpiry } from "./option-chain.js";
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
