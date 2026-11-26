@@ -602,7 +602,7 @@ class MainActivity : FragmentActivity() {
             fitsSystemWindows = false
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(bg, surface2, Color.rgb(36, 27, 70))
+                intArrayOf(bg, surface2, Color.rgb(7, 20, 15))
             )
             // Keep content and the bottom navigation clear of Android system bars,
             // including gesture navigation and Android 15 edge-to-edge layouts.
@@ -692,7 +692,7 @@ class MainActivity : FragmentActivity() {
         bottomNav.orientation = LinearLayout.HORIZONTAL
         bottomNav.gravity = Gravity.CENTER
         bottomNav.setPadding(dp(7), dp(8), dp(7), dp(8))
-        bottomNav.background = rounded(Color.argb(248, 10, 20, 36), border, 20)
+        bottomNav.background = rounded(Color.argb(248, 5, 16, 12), border, 20)
         val items = listOf(
             Triple("Home", "⌂", if (isMarathi()) "होम" else "Home"),
             Triple("Market", "▥", if (isMarathi()) "मार्केट" else "Market"),
@@ -1183,23 +1183,6 @@ class MainActivity : FragmentActivity() {
         workerConnectionDetailView = text("Upstox Worker • Checking connection…", 11f, muted)
         connectionCard.addView(workerConnectionDetailView)
         addGap(connectionCard, 8)
-        val testConnectionButton = Button(this).apply {
-            text = if (isMarathi()) "कनेक्शन पुन्हा तपासा" else "TEST / REFRESH CONNECTION"
-            setOnClickListener {
-                isEnabled = false
-                val feed = marketDataFeed
-                if (feed is MarketDataForegroundService) {
-                    feed.refreshNow {
-                        runOnUiThread { isEnabled = true }
-                    }
-                } else {
-                    isEnabled = true
-                    updateFeedStatus(FeedConnectionState.OFFLINE, "Background market service is not connected")
-                }
-            }
-        }
-        connectionCard.addView(testConnectionButton, LinearLayout.LayoutParams(-1, dp(46)))
-        addGap(connectionCard, 5)
         connectionCard.addView(text("Read-only market data. Broker credentials stay on the secure server; no order execution.", 10f, amber))
         root.addView(connectionCard)
         addGap(root, 12)
@@ -1760,7 +1743,7 @@ class MainActivity : FragmentActivity() {
 
         override fun onDraw(c: Canvas) {
             super.onDraw(c)
-            c.drawColor(Color.argb(245, 20, 34, 57))
+            c.drawColor(Color.argb(245, 7, 20, 17))
             val l = dp(34).toFloat()
             val r = width - dp(8).toFloat()
             val t = dp(18).toFloat()
