@@ -679,7 +679,7 @@ class MainActivity : FragmentActivity() {
             }
         }
         addGap(pageContent, 12)
-        pageContent.addView(text("MGrow  /  \${page.uppercase()} SECTION", 10f, muted, true).apply {
+        pageContent.addView(text("MGrow  /  ${page.uppercase()} SECTION", 10f, muted, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(12))
         })
@@ -918,7 +918,7 @@ class MainActivity : FragmentActivity() {
     private fun buildAdvancedMarketStudies(): View {
         val box = card()
         box.addView(text("ADVANCED INDICATOR STUDIES", 11f, cyan, true)); addGap(box, 8)
-        val candles = latestSnapshot?.fiveMinuteCandles.orEmpty()
+        val candles = if (latestSnapshot?.isStale == false) latestSnapshot?.fiveMinuteCandles.orEmpty() else emptyList()
         val closes = candles.map { it.close }
         val rsiValues = mutableListOf<Double>()
         if (closes.size >= 15) for (end in 14 until closes.size) {
@@ -950,10 +950,10 @@ class MainActivity : FragmentActivity() {
             val maxV = bins.values.maxOrNull() ?: 0.0
             val pocKey = bins.maxByOrNull { it.value }?.key
             val poc = pocKey?.let { lo + (it + 0.5) * step }
-            box.addView(text("Point of Control (approx.): \${formatMarketValue(poc)}", 15f, green, true))
+            box.addView(text("Point of Control (approx.): ${formatMarketValue(poc)}", 15f, green, true))
             bins.entries.sortedByDescending { it.value }.take(4).forEach { e ->
                 val level = lo + (e.key + 0.5) * step; val ratio = if (maxV > 0.0) e.value / maxV else 0.0
-                box.addView(text("\${formatMarketValue(level)}  •  " + "▰".repeat((ratio * 12).toInt().coerceAtLeast(1)), 10f, muted))
+                box.addView(text("${formatMarketValue(level)}  •  " + "▰".repeat((ratio * 12).toInt().coerceAtLeast(1)), 10f, muted))
             }
             box.addView(text("Close-price buckets only; indicative, not exchange tick-level volume-at-price.", 9f, amber))
         }
@@ -965,7 +965,7 @@ class MainActivity : FragmentActivity() {
         box.addView(text("AI-GENERATED REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
         val snap = latestSnapshot; val candles = snap?.fiveMinuteCandles.orEmpty()
         val decision = if (snap != null && !snap.isStale && candles.isNotEmpty()) SignalEngine.evaluate(candles, snap.oneMinuteCandles) else null
-        if (snap == null || snap.isStale || decision == null || decision.bias == TradeBias.WAIT) {
+        if (snap == null || snap.isStale || decision == null || !decision.confirmed || decision.bias == TradeBias.WAIT) {
             box.addView(text("WAIT • Fresh confirmed market conditions required.", 13f, amber, true))
             box.addView(text("No entry, stop-loss or target while data is stale or setup is unconfirmed.", 10f, muted))
             return box
@@ -1136,7 +1136,7 @@ class MainActivity : FragmentActivity() {
             return row
         }
 
-        val themes = arrayOf("Midnight", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
+        val themes = arrayOf("MGrow Neon", "Pure Black", "Ocean Blue", "Blue Glass", "Graphite")
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
             (prefs.getString("theme", "Midnight") ?: "Midnight") + "  •  5 display themes"
