@@ -24,12 +24,28 @@ data class AiPerformanceReport(
  * Scores are heuristic setup-strength scores, not probabilities or proven win rates.
  */
 object AdvancedAiAnalytics {
+    private val detectionNames = listOf(
+        "Chart pattern detection",
+        "Auto support & resistance",
+        "Smart money / volume spike",
+        "Option chain & OI analysis",
+        "Fakeout detection",
+        "RSI divergence",
+        "Market sentiment & news",
+        "AI risk & volatility",
+        "Candlestick & scalping setup",
+        "AI master signal & market bias"
+    )
+
+    fun unavailable(now: Long, reason: String): AiPerformanceReport =
+        AiPerformanceReport(now, detectionNames.map { AiDetection(it, null, reason) })
+
     fun evaluate(candles5m: List<MarketCandle>, candles1m: List<MarketCandle>, now: Long): AiPerformanceReport {
         if (candles5m.size < 22 || candles1m.size < 2 ||
             !validSeries(candles5m) || !validSeries(candles1m) ||
             now < candles5m.last().timestampMillis || now - candles5m.last().timestampMillis > 10 * 60_000L ||
             now < candles1m.last().timestampMillis || now - candles1m.last().timestampMillis > 2 * 60_000L
-        ) return AiPerformanceReport(now, listOf(AiDetection("Market data validation", null, "Fresh, chronological 5m and 1m candles are required.")))
+        ) return unavailable(now, "Fresh, chronological 5m and 1m candles are required.")
 
         val c = candles5m
         val last = c.last()
