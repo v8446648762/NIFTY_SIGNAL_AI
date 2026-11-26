@@ -658,52 +658,95 @@ class MainActivity : FragmentActivity() {
         // The foreground service owns the read-only Cloudflare Worker feed across Activity lifecycles.
     }
 
+    private fun isProPanelEnabled(panelNumber: Int): Boolean =
+        getSharedPreferences("mgrow_settings", MODE_PRIVATE)
+            .getBoolean("pro_panel_$panelNumber", true)
+
     private fun showPage(page: String) {
         currentPage = page
         pageContent.removeAllViews()
         when (page) {
-            "Home" -> pageContent.addView(buildHomeDashboard())
+            "Home" -> {
+                pageContent.addView(buildHomeDashboard())
+                if (isProPanelEnabled(20)) {
+                    addGap(pageContent, 10)
+                    section(pageContent, "SYSTEM HEALTH", "READ-ONLY FEED STATUS")
+                    pageContent.addView(buildSystemHealthPanel())
+                }
+            }
             "Market" -> {
                 pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                val optionChainButton = Button(this).apply {
-                    text = "LIVE OPTION CHAIN • NIFTY"
-                    setTextColor(Color.BLACK)
-                    setBackgroundColor(cyan)
-                    setOnClickListener {
-                        startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java))
+                if (isProPanelEnabled(5)) {
+                    val optionChainButton = Button(this).apply {
+                        text = "LIVE OPTION CHAIN • NIFTY"
+                        setTextColor(Color.BLACK)
+                        setBackgroundColor(cyan)
+                        setOnClickListener {
+                            startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java))
+                        }
                     }
+                    pageContent.addView(optionChainButton, LinearLayout.LayoutParams(-1, dp(48)))
+                    addGap(pageContent, 12)
                 }
-                pageContent.addView(optionChainButton, LinearLayout.LayoutParams(-1, dp(48)))
-                addGap(pageContent, 12)
-                section(pageContent, "LIVE MARKET TERMINAL", "NIFTY 50")
-                pageContent.addView(buildChartCard()); addGap(pageContent, 14)
-                section(pageContent, "TECHNICAL STUDIES", "LIVE INDICATORS")
-                pageContent.addView(buildIndicators()); addGap(pageContent, 14)
-                pageContent.addView(buildAdvancedMarketStudies()); addGap(pageContent, 14)
-                section(pageContent, "MARKET STRUCTURE", "KEY LEVELS")
-                pageContent.addView(buildLevels()); addGap(pageContent, 14)
-                section(pageContent, "MARKET INTELLIGENCE", "TREND & PRICE ACTION")
-                pageContent.addView(buildInsights())
+                if (isProPanelEnabled(3) || isProPanelEnabled(17)) {
+                    section(pageContent, "LIVE MARKET TERMINAL", "NIFTY 50 • MULTI-TIMEFRAME")
+                    pageContent.addView(buildChartCard()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(4)) {
+                    section(pageContent, "TECHNICAL STUDIES", "LIVE INDICATORS")
+                    pageContent.addView(buildIndicators()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(8)) {
+                    section(pageContent, "VOLUME INTELLIGENCE", "VALIDATED CANDLE ANALYSIS")
+                    pageContent.addView(buildAdvancedMarketStudies()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(6) || isProPanelEnabled(19)) {
+                    section(pageContent, "MARKET STRUCTURE", "SUPPORT • RESISTANCE • KEY LEVELS")
+                    pageContent.addView(buildLevels()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(12)) {
+                    section(pageContent, "MARKET INTELLIGENCE", "TREND & PRICE ACTION")
+                    pageContent.addView(buildInsights())
+                }
+                if (isProPanelEnabled(15)) {
+                    addGap(pageContent, 14)
+                    section(pageContent, "NEWS INTELLIGENCE", "VERIFIED DATA ONLY")
+                    pageContent.addView(buildNewsUnavailablePanel())
+                }
             }
             "AI" -> {
                 pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                section(pageContent, "SMART AI SIGNAL ENGINE", "CE / PE / WAIT")
-                pageContent.addView(buildSignalCard()); addGap(pageContent, 14)
-                section(pageContent, "AI TRADE PLAN", "REFERENCE LEVELS ONLY")
-                pageContent.addView(buildEntryRiskTargetCard()); addGap(pageContent, 14)
-                section(pageContent, "NEXT 5-MINUTE CANDLE", "HEURISTIC ANALYSIS")
-                pageContent.addView(buildNextCandleCard()); addGap(pageContent, 14)
-                section(pageContent, "AI RISK METER", "RISK ASSESSMENT")
-                pageContent.addView(buildRiskMeter()); addGap(pageContent, 14)
-                section(pageContent, "AI DETECTION CENTER", "10 LIVE MARKET CHECKS")
-                pageContent.addView(buildAiDetectionCenter()); addGap(pageContent, 14)
-                section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
-                pageContent.addView(buildAlerts())
+                if (isProPanelEnabled(2)) {
+                    section(pageContent, "AI MASTER SIGNAL", "CE / PE / WAIT • READ ONLY")
+                    pageContent.addView(buildSignalCard()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(11)) {
+                    section(pageContent, "SCALPING SETUP", "REFERENCE LEVELS ONLY")
+                    pageContent.addView(buildEntryRiskTargetCard()); addGap(pageContent, 14)
+                    section(pageContent, "NEXT 5-MINUTE CANDLE", "HEURISTIC ANALYSIS")
+                    pageContent.addView(buildNextCandleCard()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(14) || isProPanelEnabled(13)) {
+                    section(pageContent, "AI RISK METER", "RISK & VOLATILITY ASSESSMENT")
+                    pageContent.addView(buildRiskMeter()); addGap(pageContent, 14)
+                }
+                if ((7..10).any { isProPanelEnabled(it) } || isProPanelEnabled(9)) {
+                    section(pageContent, "AI DETECTION CENTER", "10 MARKET CHECKS • DATA-VALIDATED")
+                    pageContent.addView(buildAiDetectionCenter()); addGap(pageContent, 14)
+                }
+                if (isProPanelEnabled(16)) {
+                    section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
+                    pageContent.addView(buildAlerts())
+                }
             }
             "Reports" -> {
                 pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                section(pageContent, "AI PERFORMANCE", "SIGNAL HISTORY")
-                pageContent.addView(buildReports())
+                if (isProPanelEnabled(18)) {
+                    section(pageContent, "AI PERFORMANCE", "SIGNAL HISTORY")
+                    pageContent.addView(buildReports())
+                } else {
+                    pageContent.addView(text("AI Performance Panel is disabled in Settings.", 12f, muted))
+                }
             }
             "Settings" -> {
                 pageContent.addView(buildHeader()); addGap(pageContent, 12)
@@ -825,6 +868,39 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private fun buildSystemHealthPanel(): View {
+        val box = card()
+        val snapshot = latestSnapshot
+        val ageSeconds = snapshot?.let {
+            ((System.currentTimeMillis() - it.receivedAtMillis).coerceAtLeast(0L) / 1000L)
+        }
+        val status = when {
+            snapshot == null -> "WAITING FOR FIRST SNAPSHOT"
+            snapshot.isStale -> "STALE • NOT LIVE"
+            else -> "FRESH VALIDATED SNAPSHOT"
+        }
+        box.addView(text("MARKET FEED HEALTH", 11f, cyan, true))
+        addGap(box, 6)
+        box.addView(text(status, 15f, if (snapshot != null && !snapshot.isStale) green else amber, true))
+        addGap(box, 6)
+        box.addView(text("Last receipt age: ${ageSeconds?.let { "$it sec" } ?: "--"}", 10f, muted))
+        box.addView(text("5-minute candles: ${snapshot?.fiveMinuteCandles?.size ?: 0}", 10f, muted))
+        box.addView(text("1-minute candles: ${snapshot?.oneMinuteCandles?.size ?: 0}", 10f, muted))
+        box.addView(text("Order execution: DISABLED • Broker access: READ ONLY", 10f, amber, true))
+        return box
+    }
+
+    private fun buildNewsUnavailablePanel(): View {
+        val box = card()
+        box.addView(text("NEWS FEED: DATA UNAVAILABLE", 12f, amber, true))
+        addGap(box, 5)
+        box.addView(text(
+            "No verified news provider is connected to MGrow. Headlines and sentiment will remain unavailable rather than showing invented or unverified news.",
+            10f, muted
+        ))
+        return box
+    }
+
     private fun buildHomeDashboard(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -846,8 +922,10 @@ class MainActivity : FragmentActivity() {
         metrics.addView(dynamicMetric("CHANGE", "—", muted) { changeValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
         metrics.addView(dynamicMetric("DAY HIGH", "—", white) { dayHighValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
         metrics.addView(dynamicMetric("DAY LOW", "—", white) { dayLowValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
-        market.addView(metrics); root.addView(market); addGap(root, 12)
+        market.addView(metrics)
+        if (isProPanelEnabled(1)) { root.addView(market); addGap(root, 12) }
 
+        if (isProPanelEnabled(2)) {
         section(root, "MARKET PULSE", "LIVE VALIDATED DATA")
         val pulse = card()
         val signalRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -856,6 +934,7 @@ class MainActivity : FragmentActivity() {
         pulse.addView(signalRow); addGap(pulse, 8)
         val state = text(if (latestSnapshot == null) "Signals paused until fresh candles arrive" else if (latestSnapshot?.isStale == true) "Stale data detected • Signals paused" else "Market analysis active", 11f, muted)
         signalReasonView = state; pulse.addView(state); root.addView(pulse); addGap(root, 12)
+        }
 
         section(root, "QUICK TERMINAL", "OPEN WORKSPACE")
         fun tile(title: String, subtitle: String, glyph: String, destination: String): View =
