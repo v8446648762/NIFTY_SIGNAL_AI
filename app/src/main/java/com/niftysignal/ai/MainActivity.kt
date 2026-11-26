@@ -967,61 +967,81 @@ class MainActivity : FragmentActivity() {
 
     private fun applySavedAppearance() {
         val prefs = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
-        when (prefs.getString("theme", "MGrow Neon")) {
-            "Premium Black Glass", "Pure Black", "MGrow Neon" -> {
-                bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
-                surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
-                muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
-            }
-            "Futuristic AI", "Cyber Neon" -> {
-                bg = Color.rgb(7, 9, 24); surface = Color.rgb(18, 22, 48)
-                surface2 = Color.rgb(27, 32, 68); border = Color.rgb(76, 91, 190)
-                muted = Color.rgb(190, 198, 235); white = Color.rgb(248, 249, 255)
-            }
-            "Bloomberg Terminal", "Carbon Fiber" -> {
-                bg = Color.rgb(15, 17, 20); surface = Color.rgb(32, 35, 40)
-                surface2 = Color.rgb(43, 47, 53); border = Color.rgb(112, 103, 77)
-                muted = Color.rgb(205, 205, 195); white = Color.rgb(255, 250, 230)
-            }
-            "Angel One Inspired", "Ocean Blue" -> {
-                bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
-                surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
-                muted = Color.rgb(195, 220, 235); white = Color.WHITE
-            }
-            "Minimal Pro", "Graphite" -> {
-                bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
-                surface2 = Color.rgb(48, 54, 66); border = Color.rgb(95, 105, 125)
-                muted = Color.rgb(210, 215, 225); white = Color.WHITE
-            }
-            "Blue Ocean Glass", "Blue Glass", "TradingView Inspired" -> {
-                bg = Color.rgb(13, 24, 45); surface = Color.argb(226, 28, 43, 69)
-                surface2 = Color.argb(238, 40, 61, 96); border = Color.argb(220, 88, 151, 220)
-                muted = Color.rgb(190, 211, 238); white = Color.rgb(248, 251, 255)
-            }
-            "Luxury Gold" -> {
-                bg = Color.rgb(18, 16, 12); surface = Color.rgb(39, 34, 25)
-                surface2 = Color.rgb(54, 46, 31); border = Color.rgb(166, 130, 55)
-                muted = Color.rgb(220, 205, 170); white = Color.rgb(255, 247, 225)
-            }
-            "Ocean Blue" -> {
-                bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
-                surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
-                muted = Color.rgb(195, 220, 235); white = Color.WHITE
-            }
-            "Blue Glass" -> {
-                bg = Color.rgb(13, 24, 45); surface = Color.argb(226, 28, 43, 69)
-                surface2 = Color.argb(238, 40, 61, 96); border = Color.argb(220, 88, 151, 220)
-                muted = Color.rgb(190, 211, 238); white = Color.rgb(248, 251, 255)
-            }
-            "Graphite" -> {
-                bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
-                surface2 = Color.rgb(48, 54, 66); border = Color.rgb(95, 105, 125)
-                muted = Color.rgb(210, 215, 225); white = Color.WHITE
-            }
-            else -> {
-                bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
-                surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
-                muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
+        val selectedTheme = prefs.getString("theme", "Premium Black Glass") ?: "Premium Black Glass"
+        // The 20 migrated FYERS reference palettes are local display-only preferences.
+        // No market feed, broker credentials, or network configuration is touched here.
+        val migratedPalette = when (selectedTheme) {
+            "Black Neon Green" -> arrayOf("#050A08", "#101B15", "#39FF14", "#F7FFF9", "#AFC3B5")
+            "Midnight Blue" -> arrayOf("#071323", "#10283B", "#00BFFF", "#F4FAFF", "#AFC4D5")
+            "Cyber Purple" -> arrayOf("#10091B", "#241535", "#B45CFF", "#FBF7FF", "#C8B8D8")
+            "Graphite Silver" -> arrayOf("#17191D", "#292E35", "#C0C0C0", "#F5F7FA", "#B9C1CB")
+            "Emerald Pro" -> arrayOf("#071810", "#102B1D", "#00C878", "#F2FFF7", "#AAC9B7")
+            "Royal Gold" -> arrayOf("#100E0A", "#211A10", "#FFD700", "#FFF9E8", "#CFC3A6")
+            "Crimson Pro" -> arrayOf("#1B090C", "#32151B", "#FF3B5C", "#FFF5F6", "#D5B8BE")
+            "Arctic White" -> arrayOf("#F5F8FC", "#FFFFFF", "#1677FF", "#17202A", "#526171")
+            "Slate Professional" -> arrayOf("#202A35", "#303D4B", "#38BDF8", "#F3F7FB", "#B8C7D5")
+            "Sunset Orange" -> arrayOf("#21100A", "#3A2015", "#FF8C42", "#FFF8F2", "#D8B9A5")
+            "Rose Gold" -> arrayOf("#21151A", "#38252D", "#FFB6C1", "#FFF7FA", "#D8BBC6")
+            "Titanium Blue" -> arrayOf("#111B2A", "#202F43", "#6495ED", "#F4F7FF", "#B7C5DC")
+            "Matrix Green" -> arrayOf("#020B05", "#0B1D10", "#00FF66", "#F2FFF5", "#A8CDB2")
+            "Deep Ocean Teal" -> arrayOf("#071B1C", "#123334", "#00D6C9", "#F1FFFE", "#AED0CD")
+            "AMOLED Black" -> arrayOf("#000000", "#101010", "#00E676", "#FFFFFF", "#B8C4BC")
+            "Luxury Champagne" -> arrayOf("#1B1710", "#302719", "#F7D794", "#FFF9EC", "#D5C8AE")
+            "Electric Blue" -> arrayOf("#050B20", "#111F42", "#2979FF", "#F4F7FF", "#B7C8E8")
+            "Cyber Red" -> arrayOf("#16070B", "#2B1119", "#FF1744", "#FFF5F7", "#D8B9C2")
+            "Premium Light" -> arrayOf("#F7F8F4", "#FFFFFF", "#00A86B", "#17231C", "#52645A")
+            "Frosted Cyan" -> arrayOf("#071522", "#102F43", "#00E5FF", "#F2FBFF", "#B0C9D6")
+            else -> null
+        }
+        if (migratedPalette != null) {
+            bg = Color.parseColor(migratedPalette[0])
+            surface = Color.parseColor(migratedPalette[1])
+            surface2 = Color.parseColor(migratedPalette[1])
+            border = Color.parseColor(migratedPalette[2])
+            white = Color.parseColor(migratedPalette[3])
+            muted = Color.parseColor(migratedPalette[4])
+        } else {
+            when (selectedTheme) {
+                "Premium Black Glass", "Pure Black", "MGrow Neon" -> {
+                    bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
+                    surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
+                    muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
+                }
+                "Futuristic AI", "Cyber Neon" -> {
+                    bg = Color.rgb(7, 9, 24); surface = Color.rgb(18, 22, 48)
+                    surface2 = Color.rgb(27, 32, 68); border = Color.rgb(76, 91, 190)
+                    muted = Color.rgb(190, 198, 235); white = Color.rgb(248, 249, 255)
+                }
+                "Bloomberg Terminal", "Carbon Fiber" -> {
+                    bg = Color.rgb(15, 17, 20); surface = Color.rgb(32, 35, 40)
+                    surface2 = Color.rgb(43, 47, 53); border = Color.rgb(112, 103, 77)
+                    muted = Color.rgb(205, 205, 195); white = Color.rgb(255, 250, 230)
+                }
+                "Angel One Inspired", "Ocean Blue" -> {
+                    bg = Color.rgb(5, 25, 45); surface = Color.rgb(18, 48, 72)
+                    surface2 = Color.rgb(20, 62, 88); border = Color.rgb(50, 125, 155)
+                    muted = Color.rgb(195, 220, 235); white = Color.WHITE
+                }
+                "Minimal Pro", "Graphite" -> {
+                    bg = Color.rgb(19, 21, 27); surface = Color.rgb(38, 42, 52)
+                    surface2 = Color.rgb(48, 54, 66); border = Color.rgb(95, 105, 125)
+                    muted = Color.rgb(210, 215, 225); white = Color.WHITE
+                }
+                "Blue Ocean Glass", "Blue Glass", "TradingView Inspired" -> {
+                    bg = Color.rgb(13, 24, 45); surface = Color.argb(226, 28, 43, 69)
+                    surface2 = Color.argb(238, 40, 61, 96); border = Color.argb(220, 88, 151, 220)
+                    muted = Color.rgb(190, 211, 238); white = Color.rgb(248, 251, 255)
+                }
+                "Luxury Gold" -> {
+                    bg = Color.rgb(18, 16, 12); surface = Color.rgb(39, 34, 25)
+                    surface2 = Color.rgb(54, 46, 31); border = Color.rgb(166, 130, 55)
+                    muted = Color.rgb(220, 205, 170); white = Color.rgb(255, 247, 225)
+                }
+                else -> {
+                    bg = Color.rgb(4, 8, 10); surface = Color.rgb(12, 22, 20)
+                    surface2 = Color.rgb(17, 31, 29); border = Color.rgb(27, 112, 83)
+                    muted = Color.rgb(166, 190, 183); white = Color.rgb(244, 255, 250)
+                }
             }
         }
         green = Color.rgb(57, 255, 136); red = Color.rgb(255, 82, 105); amber = Color.rgb(255, 195, 70)
@@ -1540,7 +1560,12 @@ class MainActivity : FragmentActivity() {
         val themes = arrayOf(
             "Premium Black Glass", "Futuristic AI", "Bloomberg Terminal",
             "Angel One Inspired", "Cyber Neon", "Minimal Pro",
-            "Blue Ocean Glass", "Carbon Fiber", "TradingView Inspired", "Luxury Gold"
+            "Blue Ocean Glass", "Carbon Fiber", "TradingView Inspired", "Luxury Gold",
+            "Black Neon Green", "Midnight Blue", "Cyber Purple", "Graphite Silver",
+            "Emerald Pro", "Royal Gold", "Crimson Pro", "Arctic White",
+            "Slate Professional", "Sunset Orange", "Rose Gold", "Titanium Blue",
+            "Matrix Green", "Deep Ocean Teal", "AMOLED Black", "Luxury Champagne",
+            "Electric Blue", "Cyber Red", "Premium Light", "Frosted Cyan"
         )
         root.addView(settingRow(
             if (isMarathi()) "अॅप थीम" else "App Theme",
