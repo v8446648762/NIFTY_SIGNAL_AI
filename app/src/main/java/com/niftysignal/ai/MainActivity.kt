@@ -1195,7 +1195,7 @@ class MainActivity : FragmentActivity() {
         journal.addView(text("MANUAL TRADE JOURNAL", 12f, cyan, true))
         addGap(journal, 5)
         journal.addView(text(
-            "\${manualTrades.length()} saved entries  •  Gross P&L \${if (manualPnl >= 0.0) "+" else ""}\${formatMarketValue(manualPnl)}",
+            "${manualTrades.length()} saved entries  •  Gross P&L ${if (manualPnl >= 0.0) "+" else ""}${formatMarketValue(manualPnl)}",
             12f, if (manualPnl >= 0.0) green else red, true
         ))
         journal.addView(text("Manual record keeping only. This does not place, modify or close broker orders. Brokerage and taxes are not included in gross P&L.", 9f, amber))
@@ -1224,10 +1224,10 @@ class MainActivity : FragmentActivity() {
                 val pnl = trade.optDouble("pnl", 0.0)
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 row.addView(text(trade.optString("side"), 10f, white, true), LinearLayout.LayoutParams(0, -2, 1f))
-                row.addView(text("\${if (pnl >= 0.0) "+" else ""}\${formatMarketValue(pnl)}", 11f, if (pnl >= 0.0) green else red, true))
+                row.addView(text("${if (pnl >= 0.0) "+" else ""}${formatMarketValue(pnl)}", 11f, if (pnl >= 0.0) green else red, true))
                 journal.addView(row)
                 journal.addView(text(
-                    "\${fmt.format(java.util.Date(trade.optLong("time")))} • Entry \${formatMarketValue(trade.optDouble("entry"))} • Exit \${formatMarketValue(trade.optDouble("exit"))} • Qty \${trade.optInt("qty")}",
+                    "${fmt.format(java.util.Date(trade.optLong("time")))} • Entry ${formatMarketValue(trade.optDouble("entry"))} • Exit ${formatMarketValue(trade.optDouble("exit"))} • Qty ${trade.optInt("qty")}",
                     9f, muted
                 ))
             }
@@ -1405,7 +1405,7 @@ class MainActivity : FragmentActivity() {
                         setOnClickListener {
                             Toast.makeText(
                                 this@MainActivity,
-                                "\${java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(date.time)} • $count recorded AI signals",
+                                "${java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(date.time)} • $count recorded AI signals",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
