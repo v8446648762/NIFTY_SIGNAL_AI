@@ -96,3 +96,54 @@ test("5m candles remain available when the optional 1m request is rate limited",
   assert.match(calls[0], /minutes\/5$/);
   assert.match(calls[1], /minutes\/1$/);
 });
+
+test("selected-index candle route returns only the requested allowlisted index", async () => {
+  const requested = [];
+  const fiveMinuteTime = new Date(Date.now() - 8 * 60_000).toISOString();
+  const oneMinuteTime = new Date(Date.now() - 2 * 60_000).toISOString();
+  globalThis.fetch = async (url) => {
+    const value = String(url);
+    requested.push(value);
+    if (value.includes("/historical-candle/intraday/") && value.endsWith("/minutes/5")) {
+      return new Response(JSON.stringify({ status: "success", data: { candles: [
+        [fiveMinuteTime, 52000, 52020, 51990, 52010, 900, 0],
+      ] } }), { status: 200 });
+    }
+    if (value.includes("/historical-candle/intraday/") && value.endsWith("/minutes/1")) {
+      return new Response(JSON.stringify({ status: "success", data: { candles: [
+        [oneMinuteTime, 52005, 52015, 52000, 52010, 180, 0],
+      ] } }), { status: 200 });
+    }
+    if (value.includes("/market-quote/quotes")) {
+      return new Response(JSON.stringify({ status: "success", data: {
+        "NSE_INDEX:Nifty Bank": {
+          timestamp: new Date().toISOString(),
+          prev_close_price: 51900,
+          ohlc: { high: 52100, low: 51800 },
+        },
+      } }), { status: 200 });
+    }
+    throw new Error("Unexpected Upstox URL: " + value);
+  };
+  const response = await handleRequest(new Request("https://worker.example/v1/index/candles?symbol=BANKNIFTY", {
+    headers: { "CF-Connecting-IP": "192.0.2.45" },
+  }), configuredEnv);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.symbol, "BANKNIFTY");
+  assert.equal(body.instrumentKey, "NSE_INDEX|Nifty Bank");
+  assert.equal(body.data.fiveMinuteCandles[0].close, 52010);
+  assert.equal(body.data.previousClose, 51900);
+  assert.equal(body.data.dayHigh, 52100);
+  assert.equal(body.data.dayLow, 51800);
+  assert.ok(requested.some(url => url.includes(encodeURIComponent("NSE_INDEX|Nifty Bank"))));
+});
+
+test("selected-index candle route rejects arbitrary instruments", async () => {
+  globalThis.fetch = async () => { throw new Error("No upstream request expected"); };
+  const response = await handleRequest(new Request("https://worker.example/v1/index/candles?symbol=RELIANCE", {
+    headers: { "CF-Connecting-IP": "192.0.2.46" },
+  }), configuredEnv);
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "unsupported_index" });
+});
