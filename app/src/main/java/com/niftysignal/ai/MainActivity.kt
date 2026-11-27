@@ -1206,8 +1206,18 @@ class MainActivity : FragmentActivity() {
             box.addView(text(item.detail, 9f, muted))
             addGap(box, 5)
         }
+        val advanced = centralMarketState?.advancedSignalResult
+        if (advanced != null) {
+            addGap(box, 7)
+            box.addView(text(
+                "ADVANCED AI v1 • ${advanced.bias.name} • ${advanced.confidenceLabel}",
+                10f, if (advanced.bias == TradeBias.WAIT) amber else cyan, true
+            ))
+            advanced.reasons.take(2).forEach { box.addView(text(it, 9f, muted)) }
+            advanced.warnings.forEach { box.addView(text(it, 9f, amber)) }
+        }
         box.addView(text(
-            "Scores हे heuristic analysis आहेत; नफ्याची शक्यता किंवा verified win-rate नाहीत. OI आणि News साठी verified data नसल्यास DATA UNAVAILABLE दाखवले जाईल.",
+            "Scores हे heuristic analysis आहेत; नफ्याची शक्यता किंवा verified win-rate नाहीत. OI फक्त recent Upstox API snapshot मधून; News verified source नसल्यास DATA UNAVAILABLE.",
             9f, amber
         ))
         return box
