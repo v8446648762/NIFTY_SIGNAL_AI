@@ -208,8 +208,16 @@ class LiveOptionChainActivity : Activity() {
         } catch (error: Exception) {
             val message = error.message ?: "Unable to refresh option chain"
             runOnUiThread {
-                statusView.text = if (latestSnapshot == null) "OPTION CHAIN UNAVAILABLE • $message" else "STALE SNAPSHOT • $message"
-                statusView.setTextColor(RED)
+                val saved = latestSnapshot
+                if (saved != null) {
+                    // Keep the last validated rows visible when refresh fails.
+                    renderSnapshot(saved, cached = true)
+                    statusView.text = "LAST AVAILABLE • NOT LIVE • ${formatSnapshotTime(saved.receivedAtMillis)}\\nRefresh failed: $message"
+                    statusView.setTextColor(AMBER)
+                } else {
+                    statusView.text = "NO SAVED OPTION-CHAIN DATA • NOT LIVE\\nRefresh failed: $message"
+                    statusView.setTextColor(RED)
+                }
             }
         } finally {
             connection?.disconnect()
@@ -309,9 +317,9 @@ class LiveOptionChainActivity : Activity() {
         val age = (System.currentTimeMillis() - snapshot.receivedAtMillis).coerceAtLeast(0L)
         val lastAvailable = cached || age > MAX_SNAPSHOT_AGE_MS
         statusView.text = if (lastAvailable) {
-            "MARKET CLOSED / LAST AVAILABLE SNAPSHOT • ${snapshot.expiry} • NOT LIVE"
+            "LAST AVAILABLE SNAPSHOT • ${snapshot.expiry} • NOT LIVE • ${formatSnapshotTime(snapshot.receivedAtMillis)}"
         } else {
-            "RECENT UPSTOX API SNAPSHOT • ${snapshot.expiry} • NOT TICK-VERIFIED"
+            "RECENT UPSTOX API SNAPSHOT • ${snapshot.expiry} • NOT TICK-VERIFIED • ${formatSnapshotTime(snapshot.receivedAtMillis)}"
         }
         statusView.setTextColor(if (lastAvailable) AMBER else GREEN)
 
@@ -333,6 +341,10 @@ class LiveOptionChainActivity : Activity() {
         }
         renderTable(snapshot.rows, snapshot.spot)
     }
+
+    private fun formatSnapshotTime(epochMillis: Long): String =
+        java.text.SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale.getDefault())
+            .format(java.util.Date(epochMillis))
 
     private fun calculateMaxPain(rows: List<StrikeRow>): Double? {
         val candidates = rows.map { it.strike }
