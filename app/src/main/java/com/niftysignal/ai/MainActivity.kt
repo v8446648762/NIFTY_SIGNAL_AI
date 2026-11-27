@@ -213,6 +213,8 @@ class MainActivity : FragmentActivity() {
     private lateinit var chartModeNoteView: TextView
     private lateinit var headerModePill: TextView
     private lateinit var workerConnectionDetailView: TextView
+    private lateinit var candleCountsView: TextView
+    private lateinit var receiptAgeView: TextView
     private var marketBiasView: TextView? = null
     private var marketDetailView: TextView? = null
     private var supertrendView: TextView? = null
@@ -303,6 +305,8 @@ class MainActivity : FragmentActivity() {
         if (::changeValueView.isInitialized) changeValueView.text = "—"
         if (::dayHighValueView.isInitialized) dayHighValueView.text = "—"
         if (::dayLowValueView.isInitialized) dayLowValueView.text = "—"
+        if (::candleCountsView.isInitialized) candleCountsView.text = "5-minute candles: waiting\n1-minute candles: waiting"
+        if (::receiptAgeView.isInitialized) receiptAgeView.text = "Last data receipt: waiting"
         if (::signalBiasView.isInitialized) {
             signalBiasView.text = "WAIT"
             signalBiasView.setTextColor(amber)
@@ -400,6 +404,12 @@ class MainActivity : FragmentActivity() {
             ?: snapshot.fiveMinuteCandles.minOfOrNull { it.low }
         if (::dayHighValueView.isInitialized) dayHighValueView.text = formatMarketValue(dayHigh)
         if (::dayLowValueView.isInitialized) dayLowValueView.text = formatMarketValue(dayLow)
+        if (::candleCountsView.isInitialized) candleCountsView.text =
+            "5-minute candles: ${snapshot.fiveMinuteCandles.size}\n1-minute candles: ${snapshot.oneMinuteCandles.size}"
+        if (::receiptAgeView.isInitialized) {
+            val age = ((System.currentTimeMillis() - snapshot.receivedAtMillis).coerceAtLeast(0L) / 1000L)
+            receiptAgeView.text = "Last data receipt: ${age}s ago • ${if (snapshot.isStale) "STALE / NOT LIVE" else "validated"}"
+        }
 
         val decision = central.signalDecision
         val report = central.aiPerformanceReport
@@ -668,7 +678,7 @@ class MainActivity : FragmentActivity() {
         pageContent = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(pageContent)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        bottomNav = LinearLayout(this)
+        bottomNav = LinearLayout(this).apply { visibility = View.GONE }
         root.addView(bottomNav, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         root.requestApplyInsets()
@@ -681,145 +691,16 @@ class MainActivity : FragmentActivity() {
             .getBoolean("pro_panel_$panelNumber", true)
 
     private fun showPage(page: String) {
-        currentPage = page
+        currentPage = "Live Data"
         pageContent.removeAllViews()
-        when (page) {
-            "Home" -> {
-                pageContent.addView(buildHomeDashboard())
-                if (isProPanelEnabled(20)) {
-                    addGap(pageContent, 10)
-                    section(pageContent, "SYSTEM HEALTH", "READ-ONLY FEED STATUS")
-                    pageContent.addView(buildSystemHealthPanel())
-                }
-            }
-            "Market" -> {
-                pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                if (isProPanelEnabled(5)) {
-                    val optionChainButton = Button(this).apply {
-                        text = "LIVE OPTION CHAIN • NIFTY"
-                        setTextColor(Color.BLACK)
-                        setBackgroundColor(cyan)
-                        setOnClickListener {
-                            startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java))
-                        }
-                    }
-                    pageContent.addView(optionChainButton, LinearLayout.LayoutParams(-1, dp(48)))
-                    addGap(pageContent, 12)
-                }
-                if (isProPanelEnabled(3) || isProPanelEnabled(17)) {
-                    section(pageContent, "LIVE MARKET TERMINAL", "NIFTY 50 • MULTI-TIMEFRAME")
-                    pageContent.addView(buildChartCard()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(4)) {
-                    section(pageContent, "TECHNICAL STUDIES", "LIVE INDICATORS")
-                    pageContent.addView(buildIndicators()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(8)) {
-                    section(pageContent, "VOLUME INTELLIGENCE", "VALIDATED CANDLE ANALYSIS")
-                    pageContent.addView(buildAdvancedMarketStudies()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(6) || isProPanelEnabled(19)) {
-                    section(pageContent, "MARKET STRUCTURE", "SUPPORT • RESISTANCE • KEY LEVELS")
-                    pageContent.addView(buildLevels()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(12)) {
-                    section(pageContent, "MARKET INTELLIGENCE", "TREND & PRICE ACTION")
-                    pageContent.addView(buildInsights())
-                }
-                if (isProPanelEnabled(15)) {
-                    addGap(pageContent, 14)
-                    section(pageContent, "NEWS INTELLIGENCE", "VERIFIED DATA ONLY")
-                    pageContent.addView(buildNewsUnavailablePanel())
-                }
-            }
-            "AI" -> {
-                pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                if (isProPanelEnabled(2)) {
-                    section(pageContent, "AI MASTER SIGNAL", "CE / PE / WAIT • READ ONLY")
-                    pageContent.addView(buildSignalCard()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(11)) {
-                    section(pageContent, "SCALPING SETUP", "REFERENCE LEVELS ONLY")
-                    pageContent.addView(buildEntryRiskTargetCard()); addGap(pageContent, 14)
-                    section(pageContent, "NEXT 5-MINUTE CANDLE", "HEURISTIC ANALYSIS")
-                    pageContent.addView(buildNextCandleCard()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(14) || isProPanelEnabled(13)) {
-                    section(pageContent, "AI RISK METER", "RISK & VOLATILITY ASSESSMENT")
-                    pageContent.addView(buildRiskMeter()); addGap(pageContent, 14)
-                }
-                if ((7..10).any { isProPanelEnabled(it) } || isProPanelEnabled(9)) {
-                    section(pageContent, "AI DETECTION CENTER", "10 MARKET CHECKS • DATA-VALIDATED")
-                    pageContent.addView(buildAiDetectionCenter()); addGap(pageContent, 14)
-                }
-                if (isProPanelEnabled(16)) {
-                    section(pageContent, "SMART ALERTS", "NOTIFICATIONS")
-                    pageContent.addView(buildAlerts())
-                }
-            }
-            "Reports" -> {
-                pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                if (isProPanelEnabled(18)) {
-                    section(pageContent, "AI PERFORMANCE", "SIGNAL HISTORY")
-                    pageContent.addView(buildReports())
-                } else {
-                    pageContent.addView(text("AI Performance Panel is disabled in Settings.", 12f, muted))
-                }
-            }
-            "Settings" -> {
-                pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                section(pageContent, "MGROW CONTROL CENTER", "PREFERENCES & SECURITY")
-                pageContent.addView(buildSettings())
-            }
-            "Testing Lab" -> {
-                pageContent.addView(buildHeader()); addGap(pageContent, 12)
-                section(pageContent, "OFFLINE TESTING LAB", "DEMO DATA • LIVE FEED ISOLATED")
-                pageContent.addView(TestingLabScreen.create(this))
-            }
-        }
-        addGap(pageContent, 12)
-        pageContent.addView(text("MGrow  /  ${page.uppercase()} SECTION", 10f, muted, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(12))
-        })
-        renderBottomNavigation()
+        pageContent.addView(buildHomeDashboard())
         latestSnapshot?.let { applyMarketSnapshot(it) }
+        bottomNav.visibility = View.GONE
     }
 
     private fun renderBottomNavigation() {
         bottomNav.removeAllViews()
-        bottomNav.orientation = LinearLayout.HORIZONTAL
-        bottomNav.gravity = Gravity.CENTER
-        bottomNav.setPadding(dp(7), dp(8), dp(7), dp(8))
-        bottomNav.background = rounded(Color.argb(248, 5, 16, 12), border, 20)
-        val items = listOf(
-            Triple("Home", "⌂", if (isMarathi()) "होम" else "Home"),
-            Triple("Market", "▥", if (isMarathi()) "मार्केट" else "Market"),
-            Triple("AI", "✦", "AI"),
-            Triple("Reports", "▤", if (isMarathi()) "रिपोर्ट" else "Reports"),
-            Triple("Settings", "⚙", if (isMarathi()) "सेटिंग" else "Settings")
-        )
-        items.forEach { item ->
-            val selected = currentPage == item.first
-            val tab = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(4), dp(5), dp(4), dp(5))
-                background = if (selected)
-                    rounded(Color.argb(76, 0, 213, 255), Color.argb(145, 0, 213, 255), 14)
-                else null
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { showPage(item.first) }
-            }
-            tab.addView(text(item.second, 20f, if (selected) cyan else muted, true).apply {
-                gravity = Gravity.CENTER
-            })
-            tab.addView(text(item.third, 9f, if (selected) cyan else muted, selected).apply {
-                gravity = Gravity.CENTER
-            })
-            bottomNav.addView(tab, LinearLayout.LayoutParams(0, -2, 1f))
-        }
+        bottomNav.visibility = View.GONE
     }
 
     private fun buildFeatureGrid(): View {
@@ -925,58 +806,78 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun buildHomeDashboard(): View {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        brand.addView(text("MGrow", 25f, white, true))
-        brand.addView(text("SMART NIFTY TRADING TERMINAL", 9f, cyan, true))
-        top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(pill(if (latestSnapshot != null && latestSnapshot?.isStale == false) "● LIVE" else "● FEED WAIT",
-            if (latestSnapshot != null && latestSnapshot?.isStale == false) green else amber))
-        root.addView(top); addGap(root, 8); root.addView(buildDateTimeView()); addGap(root, 14)
-
-        val market = card().apply { background = rounded(Color.rgb(8, 22, 20), green, 20) }
-        market.addView(text("NIFTY 50  •  INDEX OVERVIEW", 10f, cyan, true)); addGap(market, 6)
-        val price = text(latestSnapshot?.fiveMinuteCandles?.lastOrNull()?.close?.let(::formatMarketValue) ?: "— — —", 32f, white, true)
-        indexPriceView = price; market.addView(price)
-        val hint = text(if (latestSnapshot == null) "Waiting for validated Upstox market data" else if (latestSnapshot?.isStale == true) "Last available data • NOT LIVE" else "Validated market snapshot received", 10f, muted)
-        indexHintView = hint; market.addView(hint); addGap(market, 10)
-        val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        metrics.addView(dynamicMetric("CHANGE", "—", muted) { changeValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
-        metrics.addView(dynamicMetric("DAY HIGH", "—", white) { dayHighValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
-        metrics.addView(dynamicMetric("DAY LOW", "—", white) { dayLowValueView = it }, LinearLayout.LayoutParams(0, -2, 1f))
-        market.addView(metrics)
-        if (isProPanelEnabled(1)) { root.addView(market); addGap(root, 12) }
-
-        if (isProPanelEnabled(2)) {
-        section(root, "MARKET PULSE", "LIVE VALIDATED DATA")
-        val pulse = card()
-        val signalRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        signalRow.addView(text("AI MARKET BIAS", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
-        val bias = text("WAIT", 17f, amber, true); signalBiasView = bias; signalRow.addView(bias)
-        pulse.addView(signalRow); addGap(pulse, 8)
-        val state = text(if (latestSnapshot == null) "Signals paused until fresh candles arrive" else if (latestSnapshot?.isStale == true) "Stale data detected • Signals paused" else "Market analysis active", 11f, muted)
-        signalReasonView = state; pulse.addView(state); root.addView(pulse); addGap(root, 12)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, dp(18))
         }
 
-        section(root, "QUICK TERMINAL", "OPEN WORKSPACE")
-        fun tile(title: String, subtitle: String, glyph: String, destination: String): View =
-            LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(13), dp(13), dp(13), dp(13)); background = rounded(surface, Color.argb(210, 0, 220, 170), 16)
-                isClickable = true; isFocusable = true; setOnClickListener { showPage(destination) }
-                addView(text(glyph, 22f, green, true), LinearLayout.LayoutParams(dp(42), -2))
-                val labels = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
-                labels.addView(text(title, 14f, white, true)); labels.addView(text(subtitle, 10f, muted))
-                addView(labels, LinearLayout.LayoutParams(0, -2, 1f)); addView(text("›", 24f, cyan, true))
-            }
-        listOf(
-            Triple("MARKET TERMINAL", "Charts • Stochastic RSI • Volume Profile", "▥") to "Market",
-            Triple("SMART AI ENGINE", "Signals • Entry • Stop Loss • Targets", "✦") to "AI",
-            Triple("AI REPORTS", "Signal history • Strategy review", "▤") to "Reports",
-            Triple("SETTINGS", "Theme • Alerts • Security", "⚙") to "Settings"
-        ).forEach { (item, destination) -> root.addView(tile(item.first, item.second, item.third, destination)); addGap(root, 8) }
-        root.addView(text("ANALYSIS ONLY • READ-ONLY DATA • NO ORDER EXECUTION", 9f, amber, true).apply { gravity = Gravity.CENTER })
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brand.addView(text("MGrow", 27f, white, true))
+        brand.addView(text("NIFTY 50 • UPSTOX LIVE DATA", 10f, cyan, true))
+        header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        feedStatusView = pill("● CONNECTING", cyan)
+        header.addView(feedStatusView)
+        root.addView(header)
+        addGap(root, 18)
+
+        val connection = card()
+        connection.addView(text("MARKET DATA CONNECTION", 12f, cyan, true))
+        addGap(connection, 8)
+        workerConnectionDetailView = text("Upstox Worker • Connecting securely…", 12f, amber, true)
+        connection.addView(workerConnectionDetailView)
+        addGap(connection, 6)
+        connection.addView(text(
+            "Read-only data • Automatic reconnect • Stale data is never marked LIVE",
+            10f, muted
+        ))
+        root.addView(connection)
+        addGap(root, 14)
+
+        val market = card().apply {
+            background = rounded(Color.rgb(8, 22, 20), green, 20)
+        }
+        market.addView(text("NIFTY 50 • LIVE INDEX VALUE", 12f, cyan, true))
+        addGap(market, 8)
+        indexPriceView = text("— — —", 34f, white, true)
+        market.addView(indexPriceView)
+        addGap(market, 5)
+        indexHintView = text("Waiting for validated Upstox market data", 11f, muted)
+        market.addView(indexHintView)
+        addGap(market, 14)
+
+        val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        metrics.addView(dynamicMetric("CHANGE", "—", muted) { changeValueView = it },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(dynamicMetric("DAY HIGH", "—", white) { dayHighValueView = it },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        metrics.addView(dynamicMetric("DAY LOW", "—", white) { dayLowValueView = it },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        market.addView(metrics)
+        root.addView(market)
+        addGap(root, 14)
+
+        val health = card()
+        health.addView(text("VALIDATED FEED DETAILS", 12f, cyan, true))
+        addGap(health, 8)
+        candleCountsView = text("5-minute candles: waiting\n1-minute candles: waiting", 11f, white)
+        health.addView(candleCountsView)
+        addGap(health, 6)
+        receiptAgeView = text("Last data receipt: waiting", 11f, muted)
+        health.addView(receiptAgeView)
+        addGap(health, 10)
+        health.addView(text(
+            "MGrow फक्त NIFTY Live Data दाखवते. कोणतेही AI signals, orders किंवा trading execution नाही.",
+            11f, amber, true
+        ))
+        root.addView(health)
+        addGap(root, 16)
+        root.addView(text("LIVE DATA ONLY • NO BUY/SELL ORDER EXECUTION", 10f, amber, true).apply {
+            gravity = Gravity.CENTER
+        })
         return root
     }
 
