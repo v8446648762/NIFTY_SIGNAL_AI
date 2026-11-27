@@ -80,11 +80,14 @@ class MainActivity : FragmentActivity() {
         val serviceIntent = Intent(this, MarketDataForegroundService::class.java)
         ContextCompat.startForegroundService(this, serviceIntent)
         marketFeedBound = bindService(serviceIntent, marketFeedServiceConnection, Context.BIND_AUTO_CREATE)
+        startMarketIndicesFeed()
     }
 
     override fun onStop() {
         if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
         detachMarketDataFeed()
+        indicesFeed?.disconnect()
+        indicesFeed = null
         if (marketFeedBound) {
             unbindService(marketFeedServiceConnection)
             marketFeedBound = false
@@ -191,6 +194,14 @@ class MainActivity : FragmentActivity() {
     private lateinit var feedStatusView: TextView
     private lateinit var indexPriceView: TextView
     private lateinit var indexHintView: TextView
+    private var bankNiftyValueView: TextView? = null
+    private var bankNiftyChangeView: TextView? = null
+    private var bankNiftyStatusView: TextView? = null
+    private var finNiftyValueView: TextView? = null
+    private var finNiftyChangeView: TextView? = null
+    private var finNiftyStatusView: TextView? = null
+    private var indicesFeed: MarketIndicesFeed? = null
+    private var latestIndicesSnapshot: MarketIndicesSnapshot? = null
     private lateinit var changeValueView: TextView
     private lateinit var dayHighValueView: TextView
     private lateinit var dayLowValueView: TextView
@@ -702,6 +713,7 @@ class MainActivity : FragmentActivity() {
         }
         renderBottomNavigation()
         latestSnapshot?.let { applyMarketSnapshot(it) }
+        latestIndicesSnapshot?.let { applyMarketIndicesSnapshot(it) }
     }
 
     private fun buildPageHeading(title: String, subtitle: String): View =
@@ -849,6 +861,106 @@ class MainActivity : FragmentActivity() {
         return box
     }
 
+    private fun startMarketIndicesFeed() {
+        if (indicesFeed != null) return
+        val feed = MarketIndicesFeed()
+        indicesFeed = feed
+        feed.connect(object : MarketIndicesFeed.Listener {
+            override fun onIndices(snapshot: MarketIndicesSnapshot) {
+                runOnUiThread { applyMarketIndicesSnapshot(snapshot) }
+            }
+
+            override fun onError(message: String) {
+                runOnUiThread { showMarketIndicesUnavailable(message) }
+            }
+        })
+    }
+
+    private fun applyMarketIndicesSnapshot(snapshot: MarketIndicesSnapshot) {
+        latestIndicesSnapshot = snapshot
+        fun render(
+            quote: MarketIndexQuote?,
+            valueView: TextView?,
+            changeView: TextView?,
+            statusView: TextView?
+        ) {
+            if (quote == null) {
+                valueView?.text = "—"
+                changeView?.text = "Quote unavailable"
+                statusView?.text = "● NOT AVAILABLE"
+                statusView?.setTextColor(amber)
+                return
+            }
+            valueView?.text = String.format(java.util.Locale.US, "%,.2f", quote.lastPrice)
+            changeView?.text = String.format(
+                java.util.Locale.US, "%+.2f (%+.2f%%)", quote.change, quote.changePercent
+            )
+            changeView?.setTextColor(if (quote.change >= 0.0) green else red)
+            statusView?.text = if (quote.isFresh) "● LIVE" else "● LAST AVAILABLE • NOT LIVE"
+            statusView?.setTextColor(if (quote.isFresh) green else amber)
+        }
+        render(snapshot.quotes["BANKNIFTY"], bankNiftyValueView, bankNiftyChangeView, bankNiftyStatusView)
+        render(snapshot.quotes["FINNIFTY"], finNiftyValueView, finNiftyChangeView, finNiftyStatusView)
+    }
+
+    private fun showMarketIndicesUnavailable(message: String) {
+        listOf(bankNiftyValueView, finNiftyValueView).forEach { it?.text = "—" }
+        listOf(bankNiftyChangeView, finNiftyChangeView).forEach { it?.text = "Waiting for fresh quote" }
+        listOf(bankNiftyStatusView, finNiftyStatusView).forEach {
+            it?.text = "● DATA UNAVAILABLE • NOT LIVE"
+            it?.setTextColor(amber)
+        }
+    }
+
+    private fun buildMarketIndicesCard(): View {
+        val panel = card().apply {
+            background = rounded(Color.rgb(10, 27, 45), Color.rgb(48, 119, 171), 18)
+        }
+        panel.addView(text("MARKET INDICES", 12f, cyan, true))
+        addGap(panel, 4)
+        panel.addView(text("BANKNIFTY & FINNIFTY • UPSTOX READ-ONLY QUOTES", 9f, muted))
+        addGap(panel, 10)
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        fun indexTile(
+            title: String,
+            setViews: (TextView, TextView, TextView) -> Unit
+        ): View {
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(11), dp(10), dp(8), dp(10))
+                background = rounded(surface2, border, 14)
+            }
+            tile.addView(text(title, 11f, white, true))
+            addGap(tile, 6)
+            val value = text("—", 20f, white, true)
+            tile.addView(value)
+            addGap(tile, 3)
+            val change = text("Waiting for quote", 9f, muted, true)
+            tile.addView(change)
+            addGap(tile, 5)
+            val status = text("● CONNECTING", 8f, amber, true)
+            tile.addView(status)
+            setViews(value, change, status)
+            return tile
+        }
+        row.addView(indexTile("BANK NIFTY") { value, change, status ->
+            bankNiftyValueView = value
+            bankNiftyChangeView = change
+            bankNiftyStatusView = status
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        row.addView(indexTile("FINNIFTY") { value, change, status ->
+            finNiftyValueView = value
+            finNiftyChangeView = change
+            finNiftyStatusView = status
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
+        panel.addView(row)
+        latestIndicesSnapshot?.let { applyMarketIndicesSnapshot(it) }
+        return panel
+    }
+
     private fun buildHomeDashboard(): View {
         val blueAccent = Color.rgb(65, 176, 255)
         val blueText = Color.rgb(190, 224, 250)
@@ -907,6 +1019,8 @@ class MainActivity : FragmentActivity() {
             LinearLayout.LayoutParams(0, -2, 1f))
         market.addView(metrics)
         root.addView(market)
+        addGap(root, 14)
+        root.addView(buildMarketIndicesCard())
         addGap(root, 14)
 
         val connection = card().apply {
