@@ -410,6 +410,7 @@ class MainActivity : FragmentActivity() {
             val age = ((System.currentTimeMillis() - snapshot.receivedAtMillis).coerceAtLeast(0L) / 1000L)
             receiptAgeView.text = "Last data receipt: ${age}s ago • ${if (snapshot.isStale) "STALE / NOT LIVE" else "validated"}"
         }
+        if (::chart.isInitialized) setTf(tf)
 
         // Version 1.0.200 is a read-only live-data dashboard. AI signals,
         // indicators, chart overlays, risk scoring and report generation are intentionally disabled.
@@ -807,6 +808,12 @@ class MainActivity : FragmentActivity() {
             10f, blueAccent, true
         ))
         root.addView(health)
+        addGap(root, 14)
+        val chartSection = card()
+        chartSection.addView(text("NIFTY LIVE CHART", 12f, blueAccent, true))
+        addGap(chartSection, 8)
+        chartSection.addView(buildChartCard())
+        root.addView(chartSection)
         addGap(root, 12)
         root.addView(buildDateTimeView().apply {
             gravity = Gravity.CENTER
@@ -2203,14 +2210,29 @@ class MainActivity : FragmentActivity() {
         tf5.background = rounded(if (tf == "5 MIN") Color.argb(210, 50, 42, 83) else surface2, if (tf == "5 MIN") cyan else border, 12)
         tf1.background = rounded(if (tf == "1 MIN") Color.argb(210, 50, 42, 83) else surface2, if (tf == "1 MIN") cyan else border, 12)
         val snapshot = latestSnapshot
-        if (snapshot != null) {
-            val candles = if (tf == "5 MIN") snapshot.fiveMinuteCandles else snapshot.oneMinuteCandles
-            chart.setCandles(candles)
-            chartModePill.text = "LIVE " + if (tf == "5 MIN") "5M" else "1M"
-            chartModeNoteView.text = "LIVE MARKET DATA  •  " + tf + " CANDLES"
-        } else {
-            chart.invalidate()
+        val candles = when {
+            snapshot == null -> emptyList()
+            tf == "5 MIN" -> snapshot.fiveMinuteCandles
+            else -> snapshot.oneMinuteCandles
         }
+        chart.setCandles(candles)
+        val live = snapshot != null &&
+            snapshot.isStale == false &&
+            centralMarketState?.isLive == true &&
+            candles.isNotEmpty()
+        val timeframe = if (tf == "5 MIN") "5M" else "1M"
+        chartModePill.text = when {
+            candles.isEmpty() -> "NO DATA"
+            live -> "LIVE $timeframe"
+            else -> "LAST AVAILABLE"
+        }
+        chartModePill.setTextColor(if (live) green else amber)
+        chartModeNoteView.text = when {
+            candles.isEmpty() -> "NO $timeframe CANDLES AVAILABLE • NO SAMPLE DATA"
+            live -> "VALIDATED LIVE MARKET DATA • $timeframe CANDLES"
+            else -> "MARKET CLOSED / STALE • LAST AVAILABLE $timeframe CANDLES • NOT LIVE"
+        }
+        chartModeNoteView.setTextColor(if (live) green else amber)
     }
 
     private inner class DemoChart : View(this@MainActivity) {
@@ -2301,38 +2323,10 @@ class MainActivity : FragmentActivity() {
                 return
             }
 
-            val values = if (tf == "5 MIN")
-                listOf(25190, 25202, 25196, 25210, 25204, 25218, 25208, 25222, 25215, 25228, 25216, 25205, 25214, 25202, 25218, 25224, 25212, 25230, 25220, 25235, 25225, 25218, 25229, 25200)
-            else
-                listOf(25205, 25210, 25202, 25214, 25208, 25218, 25212, 25222, 25216, 25226, 25218, 25210, 25216, 25208, 25220, 25225, 25214, 25228, 25222, 25232, 25224, 25218, 25226, 25200)
-            val step = (r - l) / values.size
-            fun y(v: Float) = b - ((v - 25180f) / 65f) * (b - t)
-            val e9 = Path()
-            val e21 = Path()
-            values.forEachIndexed { i, close ->
-                val open = if (i == 0) close - 4 else values[i - 1]
-                val high = max(open, close) + 3 + i % 4
-                val low = min(open, close) - 2 - i % 3
-                val x = l + step * (i + .5f)
-                val color = if (close >= open) green else red
-                wick.color = color
-                body.color = color
-                c.drawLine(x, y(high.toFloat()), x, y(low.toFloat()), wick)
-                val half = max(dp(2).toFloat(), step * .27f)
-                c.drawRect(x - half, min(y(open.toFloat()), y(close.toFloat())), x + half,
-                    max(y(open.toFloat()), y(close.toFloat())) + dp(1), body)
-                val v9 = close - 3f + i % 3
-                val v21 = close - 7f + i % 2
-                if (i == 0) { e9.moveTo(x, y(v9)); e21.moveTo(x, y(v21)) }
-                else { e9.lineTo(x, y(v9)); e21.lineTo(x, y(v21)) }
-            }
-            line.color = cyan
-            c.drawPath(e9, line)
-            line.color = amber
-            c.drawPath(e21, line)
-            c.drawText("EMA 9", l, height - dp(7).toFloat(), labelPaint)
-            c.drawText("EMA 21", l + dp(52), height - dp(7).toFloat(), labelPaint)
-            c.drawText("PREVIEW", r - dp(55), dp(12).toFloat(), labelPaint)
+            labelPaint.textAlign = Paint.Align.CENTER
+            labelPaint.textSize = dp(12).toFloat()
+            c.drawText("WAITING FOR REAL MARKET CANDLES", width / 2f, height / 2f, labelPaint)
+            labelPaint.textAlign = Paint.Align.LEFT
         }
     }
 }
