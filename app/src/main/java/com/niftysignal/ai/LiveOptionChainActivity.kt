@@ -240,6 +240,7 @@ class LiveOptionChainActivity : Activity() {
         runCatching {
             val root = JSONObject(raw)
             require(root.optString("provider").equals("upstox", true))
+            require(root.optString("symbol").equals(selectedIndex, true))
             val spot = root.optDouble("spotPrice", Double.NaN)
             require(spot.isFinite() && spot > 0.0)
             val rows = parseRows(root.optJSONArray("strikes") ?: JSONArray())
