@@ -49,7 +49,7 @@ class LiveOptionChainActivity : Activity() {
 
     companion object {
         private const val ENDPOINT =
-            "https://mgrow-upstox-readonly.vikaskalburgi130.workers.dev/v1/nifty/option-chain"
+            "https://mgrow-upstox-readonly.vikaskalburgi130.workers.dev/v1/index/option-chain"
         private const val POLL_SECONDS = 30L
         private const val MAX_SNAPSHOT_AGE_MS = 60_000L
         private val BG = Color.rgb(5, 14, 13)
@@ -67,12 +67,15 @@ class LiveOptionChainActivity : Activity() {
     private lateinit var rowsContainer: LinearLayout
     private lateinit var expiryPicker: Spinner
     private var selectedExpiry = "current_week"
+    private var selectedIndex = "NIFTY"
     private var latestSnapshot: ChainSnapshot? = null
     private var executor: ScheduledExecutorService? = null
     @Volatile private var requestInFlight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedIndex = intent.getStringExtra("selected_index")
+            ?.takeIf { it in setOf("NIFTY", "BANKNIFTY", "FINNIFTY") } ?: "NIFTY"
         buildScreen()
         loadLastAvailableSnapshot()
         executor = Executors.newSingleThreadScheduledExecutor()
@@ -85,7 +88,7 @@ class LiveOptionChainActivity : Activity() {
             setPadding(dp(16), dp(18), dp(16), dp(14))
             setBackgroundColor(BG)
         }
-        page.addView(label("NIFTY LIVE OPTION CHAIN", 21f, WHITE, true))
+        page.addView(label("$selectedIndex LIVE OPTION CHAIN", 21f, WHITE, true))
         page.addView(label("UPSTOX • READ-ONLY SNAPSHOT", 10f, CYAN, true))
         page.addView(space(10))
         statusView = label("CONNECTING TO OPTION CHAIN…", 12f, AMBER, true)
@@ -128,7 +131,7 @@ class LiveOptionChainActivity : Activity() {
 
         val summaryCard = card()
         summaryCard.addView(label("OPTION CHAIN INTELLIGENCE", 13f, CYAN, true))
-        summaryView = label("Waiting for a validated NIFTY option-chain snapshot.", 12f, MUTED)
+        summaryView = label("Waiting for a validated $selectedIndex option-chain snapshot.", 12f, MUTED)
         summaryCard.addView(summaryView)
         page.addView(summaryCard)
         page.addView(space(10))
@@ -160,7 +163,8 @@ class LiveOptionChainActivity : Activity() {
         var connection: HttpURLConnection? = null
         try {
             val expiry = URLEncoder.encode(selectedExpiry, "UTF-8")
-            connection = (URL("$ENDPOINT?expiry_date=$expiry").openConnection() as HttpURLConnection).apply {
+            val symbol = URLEncoder.encode(selectedIndex, "UTF-8")
+            connection = (URL("$ENDPOINT?symbol=$symbol&expiry_date=$expiry").openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8_000
                 readTimeout = 10_000
@@ -184,24 +188,24 @@ class LiveOptionChainActivity : Activity() {
                 throw IllegalStateException("Option-chain unavailable • $reason")
             }
             val root = JSONObject(body)
-            if (!root.optString("provider").equals("upstox", true)) {
-                throw IllegalStateException("Unexpected option-chain data provider")
-            }
+            if (!root.optString("provider").equals("upstox", true) ||
+                !root.optString("symbol").equals(selectedIndex, true)
+            ) throw IllegalStateException("Unexpected option-chain index or data provider")
             val receivedAt = root.optLong("receivedAtEpochMs", 0L)
             val now = System.currentTimeMillis()
             if (receivedAt <= 0L || receivedAt > now + 5_000L || now - receivedAt > MAX_SNAPSHOT_AGE_MS) {
                 throw IllegalStateException("Option-chain response timestamp is stale or invalid")
             }
             val spot = root.optDouble("spotPrice", Double.NaN)
-            if (!spot.isFinite() || spot <= 0.0) throw IllegalStateException("NIFTY spot price is missing")
+            if (!spot.isFinite() || spot <= 0.0) throw IllegalStateException("$selectedIndex spot price is missing")
             val array = root.optJSONArray("strikes") ?: throw IllegalStateException("Option-chain strikes are missing")
             val rows = parseRows(array)
             if (rows.isEmpty()) throw IllegalStateException("No valid option-chain strike rows received")
             val snapshot = ChainSnapshot(root.optString("expiryDate"), spot, receivedAt, rows)
             latestSnapshot = snapshot
             getSharedPreferences("mgrow_option_chain", MODE_PRIVATE).edit()
-                .putString("last_snapshot", root.toString())
-                .putString("last_expiry", selectedExpiry)
+                .putString("last_snapshot_$selectedIndex", root.toString())
+                .putString("last_expiry_$selectedIndex", selectedExpiry)
                 .apply()
             publishToCentralEngine(snapshot)
             runOnUiThread { renderSnapshot(snapshot, cached = false) }
@@ -227,8 +231,8 @@ class LiveOptionChainActivity : Activity() {
 
     private fun loadLastAvailableSnapshot() {
         val prefs = getSharedPreferences("mgrow_option_chain", MODE_PRIVATE)
-        val raw = prefs.getString("last_snapshot", null) ?: return
-        val savedExpiry = prefs.getString("last_expiry", "current_week") ?: "current_week"
+        val raw = prefs.getString("last_snapshot_$selectedIndex", null) ?: return
+        val savedExpiry = prefs.getString("last_expiry_$selectedIndex", "current_week") ?: "current_week"
         selectedExpiry = savedExpiry
         val position = listOf("current_week", "next_week", "far_week", "current_month", "next_month", "far_month")
             .indexOf(savedExpiry).coerceAtLeast(0)
