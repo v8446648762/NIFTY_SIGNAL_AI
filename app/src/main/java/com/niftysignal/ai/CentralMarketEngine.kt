@@ -41,6 +41,21 @@ object CentralMarketEngine {
     private const val MAX_RECEIPT_AGE_MS = 90_000L
     private const val MAX_5M_CANDLE_AGE_MS = 10 * 60_000L
     private const val MAX_1M_CANDLE_AGE_MS = 3 * 60_000L
+    private const val MAX_OPTION_CHAIN_AGE_MS = 60_000L
+
+    @Volatile private var latestOptionChainSnapshot: OptionChainSnapshot? = null
+
+    /** Receives only a recently fetched, structurally valid Upstox option-chain snapshot. */
+    fun publishOptionChainSnapshot(snapshot: OptionChainSnapshot?) {
+        val now = System.currentTimeMillis()
+        latestOptionChainSnapshot = snapshot?.takeIf {
+            it.capturedAtMillis > 0L &&
+                it.capturedAtMillis <= now + 5_000L &&
+                now - it.capturedAtMillis in 0..MAX_OPTION_CHAIN_AGE_MS &&
+                it.underlyingPrice.isFinite() && it.underlyingPrice > 0.0 &&
+                it.analysis.pcr?.let { pcr -> pcr.isFinite() && pcr > 0.0 } == true
+        }
+    }
 
     fun evaluate(snapshot: MarketDataSnapshot, nowMillis: Long): CentralMarketState? {
         val candles5m = snapshot.fiveMinuteCandles
@@ -80,18 +95,26 @@ object CentralMarketEngine {
         val nextCandle = NextFiveMinuteCandleEngine.evaluate(
             candles5m, candles1m, intelligence, canonicalSnapshot.isStale
         )
+        val optionChain = latestOptionChainSnapshot?.takeIf {
+            it.capturedAtMillis > 0L &&
+                it.capturedAtMillis <= nowMillis &&
+                nowMillis - it.capturedAtMillis <= MAX_OPTION_CHAIN_AGE_MS &&
+                it.underlyingPrice.isFinite() && it.underlyingPrice > 0.0 &&
+                it.analysis.pcr?.let { pcr -> pcr.isFinite() && pcr > 0.0 } == true
+        }
+        if (optionChain == null) latestOptionChainSnapshot = null
         val report = if (canonicalSnapshot.isStale) {
             AdvancedAiAnalytics.unavailable(
                 nowMillis,
                 staleReason ?: "Fresh validated Upstox candles are required."
             )
         } else {
-            AdvancedAiAnalytics.evaluate(candles5m, candles1m, nowMillis)
+            AdvancedAiAnalytics.evaluate(candles5m, candles1m, nowMillis, optionChain)
         }
-        // Advanced AI v1 deliberately remains WAIT until a verified, fresh option-chain
-        // snapshot exists. No synthetic PCR/OI values are supplied by this central hub.
+        // OI/PCR is used only when a recent Upstox option-chain snapshot is present.
+        // No synthetic option-chain values are supplied by this central hub.
         val advancedSignal = AdvancedAiEngine.evaluate(
-            candles5m, candles1m, optionChain = null, nowMillis = nowMillis
+            candles5m, candles1m, optionChain, nowMillis
         )
         val risk = if (canonicalSnapshot.isStale) null
             else intelligence?.riskInputs?.let(RiskAssessmentEngine::evaluate)
