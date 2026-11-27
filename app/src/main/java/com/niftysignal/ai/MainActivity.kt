@@ -331,11 +331,11 @@ class MainActivity : FragmentActivity() {
         if (::resistanceValueView.isInitialized) resistanceValueView.text = "—"
         if (::chart.isInitialized) chart.setCandles(emptyList())
         if (::chartModePill.isInitialized) {
-            chartModePill.text = "SAMPLE CHART"
+            chartModePill.text = "NO DATA"
             chartModePill.setTextColor(amber)
         }
         if (::chartModeNoteView.isInitialized) {
-            chartModeNoteView.text = "SIMULATED PREVIEW  •  LIVE FEED NOT CONNECTED"
+            chartModeNoteView.text = "WAITING FOR REAL MARKET CANDLES • NO SAMPLE DATA"
             chartModeNoteView.setTextColor(amber)
         }
     }
@@ -1831,14 +1831,14 @@ class MainActivity : FragmentActivity() {
             "5 MIN मुख्य trend पाहण्यासाठी आणि 1 MIN entry confirmation साठी आहे. Feed जोडलेला नसेल तर chart स्पष्टपणे SAMPLE दाखवतो.",
             "Use 5 MIN for the main trend and 1 MIN for entry confirmation. Without a connected feed, the chart is clearly marked SAMPLE."
         ))
-        chartModePill = pill("SAMPLE CHART", amber)
+        chartModePill = pill("NO DATA", amber)
         tfRow.addView(chartModePill)
         box.addView(tfRow)
         addGap(box, 10)
         chart = DemoChart()
         box.addView(chart, LinearLayout.LayoutParams(-1, dp(220)))
         addGap(box, 7)
-        chartModeNoteView = text("SIMULATED PREVIEW  •  LIVE FEED NOT CONNECTED", 10f, amber)
+        chartModeNoteView = text("WAITING FOR REAL MARKET CANDLES • NO SAMPLE DATA", 10f, amber)
         box.addView(chartModeNoteView)
         return box
     }
