@@ -113,9 +113,22 @@ object CentralMarketEngine {
         }
         // OI/PCR is used only when a recent Upstox option-chain snapshot is present.
         // No synthetic option-chain values are supplied by this central hub.
-        val advancedSignal = AdvancedAiEngine.evaluate(
-            candles5m, candles1m, optionChain, nowMillis
-        )
+        val advancedSignal = if (canonicalSnapshot.isStale) {
+            AdvancedSignalResult(
+                bias = TradeBias.WAIT,
+                bullishScore = 0,
+                bearishScore = 0,
+                confidenceLabel = "NO SIGNAL",
+                trend = "STALE / PAUSED",
+                reasons = listOf(staleReason ?: "Fresh validated candles are required."),
+                warnings = listOf("Advanced AI is paused until the central feed is fresh."),
+                support = null,
+                resistance = null,
+                optionChainPcr = null
+            )
+        } else {
+            AdvancedAiEngine.evaluate(candles5m, candles1m, optionChain, nowMillis)
+        }
         val risk = if (canonicalSnapshot.isStale) null
             else intelligence?.riskInputs?.let(RiskAssessmentEngine::evaluate)
 
