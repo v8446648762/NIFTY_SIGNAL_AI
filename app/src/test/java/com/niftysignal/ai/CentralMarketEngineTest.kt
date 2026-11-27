@@ -37,7 +37,8 @@ class CentralMarketEngineTest {
         assertEquals(40, state.fiveMinuteChartIndicators.ema9Series.size)
         assertEquals(8, state.oneMinuteChartIndicators.ema21Series.size)
         assertEquals(TradeBias.WAIT, state.advancedSignalResult.bias)
-        assertTrue(state.advancedSignalResult.warnings.any { it.contains("option-chain") || it.contains("Option-chain") })
+        assertEquals("NO SIGNAL", state.advancedSignalResult.confidenceLabel)
+        assertFalse(state.volumeProfile.available)
     }
 
     @Test fun staleSnapshotCannotProduceLiveSignalOrRisk() {
