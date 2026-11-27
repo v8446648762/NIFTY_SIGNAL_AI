@@ -412,8 +412,63 @@ class MainActivity : FragmentActivity() {
         }
         if (::chart.isInitialized) setTf(tf)
 
-        // Version 1.0.200 is a read-only live-data dashboard. AI signals,
-        // indicators, chart overlays, risk scoring and report generation are intentionally disabled.
+        // All AI panels consume the same validated CentralMarketState.
+        // Stale snapshots are explicitly paused and never produce a live signal.
+        val decision = central.signalDecision
+        val indicators = decision.indicators
+        val liveAnalysis = central.isLive
+        if (::signalBiasView.isInitialized) {
+            signalBiasView.text = if (liveAnalysis) decision.bias.name else "WAIT"
+            signalBiasView.setTextColor(
+                if (!liveAnalysis) amber else when (decision.bias) {
+                    TradeBias.BUY_CE -> green
+                    TradeBias.BUY_PE -> red
+                    else -> amber
+                }
+            )
+        }
+        if (::signalStatusView.isInitialized) {
+            signalStatusView.text = when {
+                !liveAnalysis -> "AI PAUSED • NOT LIVE"
+                decision.confirmed -> "SETUP DETECTED • REVIEW"
+                else -> "WAIT • CONFIRMATION NEEDED"
+            }
+            signalStatusView.setTextColor(if (!liveAnalysis) amber else if (decision.confirmed) green else amber)
+        }
+        if (::signalReasonView.isInitialized) {
+            signalReasonView.text = if (liveAnalysis) decision.reasons.joinToString(" • ")
+                else central.staleReason ?: "Waiting for fresh validated market data."
+        }
+        if (::signalTrendValueView.isInitialized) signalTrendValueView.text =
+            if (liveAnalysis) decision.trend else "PAUSED"
+        if (::signalSetupValueView.isInitialized) signalSetupValueView.text =
+            if (liveAnalysis) if (decision.confirmed) "CONFIRMED" else "WAIT" else "PAUSED"
+        if (::signalConfirmValueView.isInitialized) {
+            val oneMinute = snapshot.oneMinuteCandles
+            signalConfirmValueView.text = when {
+                !liveAnalysis -> "PAUSED"
+                oneMinute.isEmpty() -> "1M N/A"
+                else -> {
+                    val candle = oneMinute.last()
+                    when {
+                        candle.close > candle.open -> "1M BULLISH"
+                        candle.close < candle.open -> "1M BEARISH"
+                        else -> "1M NEUTRAL"
+                    }
+                }
+            }
+        }
+
+        if (::vwapValueView.isInitialized) vwapValueView.text = formatMarketValue(indicators.vwap)
+        if (::ema9ValueView.isInitialized) ema9ValueView.text = formatMarketValue(indicators.ema9)
+        if (::ema21ValueView.isInitialized) ema21ValueView.text = formatMarketValue(indicators.ema21)
+        if (::rsiValueView.isInitialized) rsiValueView.text = formatMarketValue(indicators.rsi14)
+        if (::supportValueView.isInitialized) supportValueView.text = formatMarketValue(indicators.support)
+        if (::resistanceValueView.isInitialized) resistanceValueView.text = formatMarketValue(indicators.resistance)
+
+        updateMarketIntelligence(if (liveAnalysis) central.marketIntelligence else null)
+        updateNextCandlePrediction(if (liveAnalysis) central.nextCandlePrediction else null)
+        updateRiskMeter(if (liveAnalysis) central.riskAssessment else null)
 
     }
 
