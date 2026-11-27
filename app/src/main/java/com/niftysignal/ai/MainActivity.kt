@@ -50,6 +50,14 @@ class MainActivity : FragmentActivity() {
         if (::pageContent.isInitialized && isAppLockEnabled() && !appUnlocked && !authenticationInProgress) {
             authenticateAppLock()
         }
+
+        // Re-evaluate the last validated feed snapshot when returning from another
+        // screen (for example, after a fresh Upstox Option Chain fetch). This keeps
+        // every visible panel on the same CentralMarketEngine result without
+        // creating a second feed connection or using sample data.
+        if (::pageContent.isInitialized && (!isAppLockEnabled() || appUnlocked)) {
+            latestSnapshot?.let { applyMarketSnapshot(it) }
+        }
     }
 
     private var marketFeedBound = false
