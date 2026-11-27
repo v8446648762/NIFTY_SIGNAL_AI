@@ -2191,7 +2191,7 @@ class MainActivity : FragmentActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        titleRow.addView(text("NEXT 5-MINUTE CANDLE • SUPPORTING INPUT", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        titleRow.addView(text("NEXT 5M MODEL • CENTRAL CONFLUENCE", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         titleRow.addView(helpButton(
             "SMART AI NEXT CANDLE",
             "पुढील 5 मिनिटांच्या candle ची दिशा 5M indicators, market trend, support/resistance, price action आणि 1M retest/rejection वापरून अंदाजली जाते. Option Chain live उपलब्ध नसेल तर तो वापरला जात नाही. WAIT म्हणजे पुरेशी पुष्टी नाही.",
@@ -2213,22 +2213,28 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun updateNextCandlePrediction(result: NextCandlePrediction?) {
+        val central = centralMarketState
+        val unified = central?.unifiedAiDecision
         val direction = result?.direction ?: NextCandleDirection.WAIT
-        val label = when (direction) {
-            NextCandleDirection.GREEN -> "Next Candle is 🟢 GREEN"
-            NextCandleDirection.RED -> "Next Candle is 🔴 RED"
-            NextCandleDirection.WAIT -> "WAIT"
+        val aligned = when (direction) {
+            NextCandleDirection.GREEN -> unified?.bias == TradeBias.BUY_CE
+            NextCandleDirection.RED -> unified?.bias == TradeBias.BUY_PE
+            NextCandleDirection.WAIT -> false
         }
-        val tint = when (direction) {
-            NextCandleDirection.GREEN -> green
-            NextCandleDirection.RED -> red
-            NextCandleDirection.WAIT -> amber
+        val label = when {
+            central?.isLive != true -> "PAUSED • NOT LIVE"
+            unified?.status == "CONFLICT • WAIT" -> "CONFLICT • CENTRAL AI SAYS WAIT"
+            unified?.bias == TradeBias.WAIT -> "WAIT • PRIMARY SETUP NOT CONFIRMED"
+            aligned -> "NEXT-CANDLE MODEL ALIGNS WITH CENTRAL AI"
+            direction == NextCandleDirection.WAIT -> "NEXT-CANDLE CONFIRMATION WAITING"
+            else -> "NEXT-CANDLE MODEL DISAGREES • CENTRAL AI WAIT"
         }
+        val tint = if (aligned) green else amber
         nextCandleDirectionView?.text = label
         nextCandleDirectionView?.setTextColor(tint)
         nextCandleConfidenceView?.text = result?.heuristicConfidence?.let {
-            "Heuristic confidence score: $it/100 • Not a statistical probability"
-        } ?: "Heuristic confidence: unavailable"
+            "Supporting model score: $it/100 • not a probability or separate signal"
+        } ?: "Supporting model score: unavailable"
         nextCandleReasonView?.text = result?.reasons?.joinToString(" • ")
             ?: "Waiting for fresh validated market data."
     }
