@@ -34,14 +34,11 @@ object TechnicalAnalysis {
         candles5m: List<MarketCandle>,
         candles1m: List<MarketCandle>
     ): TechnicalSnapshot {
-        if (candles5m.size < MIN_PRIMARY_CANDLES) {
-            return waitForData("Insufficient completed five-minute candles: need at least 22.")
-        }
-        if (!candles5m.all(::isValid) || !isChronological(candles5m) ||
+        if (candles5m.isEmpty() || !candles5m.all(::isValid) || !isChronological(candles5m) ||
             (candles1m.isNotEmpty() &&
                 (!candles1m.all(::isValid) || !isChronological(candles1m)))
         ) {
-            return waitForData("Invalid or out-of-order OHLCV candle data.")
+            return waitForData("Invalid, empty or out-of-order OHLCV candle data.")
         }
 
         val closes5m = candles5m.map { it.close }
@@ -49,8 +46,31 @@ object TechnicalAnalysis {
         val ema21 = ema(closes5m, 21)
         val rsi14 = rsi(closes5m, 14)
         val vwap = sessionVwap(candles5m)
+        val recent = candles5m.takeLast(20)
+        val support = recent.minOfOrNull { it.low }
+        val resistance = recent.maxOfOrNull { it.high }
+
+        // Indicators have their own minimum history; signal confirmation has a
+        // stricter 22-candle requirement. Do not hide valid EMA/RSI values just
+        // because the full 5m setup is not ready yet.
+        if (candles5m.size < MIN_PRIMARY_CANDLES) {
+            return TechnicalSnapshot(
+                bias = TradeBias.WAIT,
+                reason = "Indicators are calculated from available candles; signal setup needs at least 22 completed 5m candles.",
+                ema9 = ema9,
+                ema21 = ema21,
+                rsi14 = rsi14,
+                vwap = vwap,
+                support = support,
+                resistance = resistance
+            )
+        }
         if (ema9 == null || ema21 == null || rsi14 == null) {
-            return waitForData("EMA / RSI indicator data is not ready.")
+            return TechnicalSnapshot(
+                TradeBias.WAIT,
+                "EMA / RSI indicator data is not ready.",
+                ema9, ema21, rsi14, vwap, support, resistance
+            )
         }
 
         val last5 = candles5m.last()
@@ -89,7 +109,6 @@ object TechnicalAnalysis {
             else -> "Full 5m setup and 1m confirmation are not aligned."
         }
 
-        val recent = candles5m.takeLast(20)
         return TechnicalSnapshot(
             bias = bias,
             reason = reason,
@@ -97,8 +116,8 @@ object TechnicalAnalysis {
             ema21 = ema21,
             rsi14 = rsi14,
             vwap = vwap,
-            support = recent.minOfOrNull { it.low },
-            resistance = recent.maxOfOrNull { it.high }
+            support = support,
+            resistance = resistance
         )
     }
 
