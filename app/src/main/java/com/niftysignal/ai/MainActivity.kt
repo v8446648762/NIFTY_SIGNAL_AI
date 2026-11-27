@@ -66,12 +66,14 @@ class MainActivity : FragmentActivity() {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val serviceBinder = binder as? MarketDataForegroundService.LocalBinder ?: return
             if (marketFeedBound && !isFinishing) {
-                attachMarketDataFeed(serviceBinder.getService())
+                niftyServiceFeed = serviceBinder.getService()
+                if (selectedIndex == "NIFTY") connectSelectedIndexFeed()
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            detachMarketDataFeed()
+            niftyServiceFeed = null
+            if (selectedIndex == "NIFTY") detachMarketDataFeed()
         }
     }
 
@@ -81,11 +83,13 @@ class MainActivity : FragmentActivity() {
         ContextCompat.startForegroundService(this, serviceIntent)
         marketFeedBound = bindService(serviceIntent, marketFeedServiceConnection, Context.BIND_AUTO_CREATE)
         startMarketIndicesFeed()
+        connectSelectedIndexFeed()
     }
 
     override fun onStop() {
         if (isAppLockEnabled() && !authenticationInProgress) appUnlocked = false
         detachMarketDataFeed()
+        niftyServiceFeed = null
         indicesFeed?.disconnect()
         indicesFeed = null
         if (marketFeedBound) {
@@ -183,6 +187,9 @@ class MainActivity : FragmentActivity() {
     private var latestSnapshot: MarketDataSnapshot? = null
     private var centralMarketState: CentralMarketState? = null
     private var currentPage = "Home"
+    private var selectedIndex = "NIFTY"
+    private var niftyServiceFeed: MarketDataFeed? = null
+    private var feedGeneration = 0L
     private var lastAiSignalKey: String? = null
     private lateinit var pageContent: LinearLayout
     private lateinit var bottomNav: LinearLayout
@@ -252,10 +259,19 @@ class MainActivity : FragmentActivity() {
         marketDataFeed?.disconnect()
         marketDataFeed = feed
         updateFeedStatus(FeedConnectionState.CONNECTING, "Connecting to market data")
-        feed.connect(marketFeedListener)
+        val generation = ++feedGeneration
+        feed.connect(object : MarketDataFeed.Listener {
+            override fun onStatusChanged(status: FeedConnectionState, message: String?) {
+                runOnUiThread { if (generation == feedGeneration) updateFeedStatus(status, message) }
+            }
+            override fun onSnapshot(snapshot: MarketDataSnapshot) {
+                runOnUiThread { if (generation == feedGeneration) applyMarketSnapshot(snapshot) }
+            }
+        })
     }
 
     fun detachMarketDataFeed() {
+        feedGeneration++
         marketDataFeed?.disconnect()
         marketDataFeed = null
         updateFeedStatus(FeedConnectionState.OFFLINE, "No market feed attached")
@@ -391,9 +407,9 @@ class MainActivity : FragmentActivity() {
         val latest = snapshot.fiveMinuteCandles.last()
         if (::indexPriceView.isInitialized) indexPriceView.text = formatMarketValue(latest.close)
         if (::indexHintView.isInitialized) indexHintView.text = if (snapshot.isStale) {
-            "Last available 5-minute NIFTY candle • NOT LIVE"
+            "Last available 5-minute ${selectedIndexLabel()} candle • NOT LIVE"
         } else {
-            "Latest validated 5-minute NIFTY candle • Feed received just now"
+            "Latest validated 5-minute ${selectedIndexLabel()} candle • Feed received just now"
         }
 
         val previousClose = snapshot.previousClose?.takeIf { it.isFinite() && it > 0.0 }
@@ -613,6 +629,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         super.onCreate(savedInstanceState)
+        selectedIndex = getSharedPreferences("mgrow_settings", MODE_PRIVATE)
+            .getString("selected_market_index", "NIFTY")
+            ?.takeIf { it in setOf("NIFTY", "BANKNIFTY", "FINNIFTY") } ?: "NIFTY"
         window.setBackgroundDrawableResource(R.drawable.mgrow_splash)
         applySavedAppearance()
         window.statusBarColor = bg
@@ -667,10 +686,12 @@ class MainActivity : FragmentActivity() {
         val allowedPages = setOf("Home", "AI", "Chart", "Options", "More")
         currentPage = page.takeIf { it in allowedPages } ?: "Home"
         pageContent.removeAllViews()
+        pageContent.addView(buildIndexSelector())
+        addGap(pageContent, 10)
         when (currentPage) {
             "Home" -> pageContent.addView(buildHomeDashboard())
             "AI" -> {
-                pageContent.addView(buildPageHeading("AI INTELLIGENCE", "Validated NIFTY intraday analysis"))
+                pageContent.addView(buildPageHeading("AI INTELLIGENCE", "Validated ${selectedIndexLabel()} intraday analysis"))
                 pageContent.addView(buildSignalCard()); addGap(pageContent, 12)
                 pageContent.addView(buildInsights()); addGap(pageContent, 12)
                 pageContent.addView(buildNextCandleCard()); addGap(pageContent, 12)
@@ -693,7 +714,7 @@ class MainActivity : FragmentActivity() {
                 addGap(panel, 12)
                 panel.addView(Button(this).apply {
                     text = "OPEN OPTION CHAIN"
-                    setOnClickListener { startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java)) }
+                    setOnClickListener { startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java).putExtra("selected_index", selectedIndex)) }
                 }, LinearLayout.LayoutParams(-1, dp(48)))
                 pageContent.addView(panel)
             }
@@ -709,6 +730,60 @@ class MainActivity : FragmentActivity() {
         renderBottomNavigation()
         latestSnapshot?.let { applyMarketSnapshot(it) }
         latestIndicesSnapshot?.let { applyMarketIndicesSnapshot(it) }
+    }
+
+    private fun selectedIndexLabel(): String = when (selectedIndex) {
+        "BANKNIFTY" -> "BANKNIFTY"
+        "FINNIFTY" -> "FINNIFTY"
+        else -> "NIFTY 50"
+    }
+
+    private fun selectMarketIndex(symbol: String) {
+        if (symbol !in setOf("NIFTY", "BANKNIFTY", "FINNIFTY") || symbol == selectedIndex) return
+        selectedIndex = symbol
+        getSharedPreferences("mgrow_settings", MODE_PRIVATE).edit()
+            .putString("selected_market_index", symbol).apply()
+        CentralMarketEngine.publishOptionChainSnapshot(null)
+        clearLiveDashboard("Switching to $symbol • waiting for its own validated candles.")
+        connectSelectedIndexFeed()
+        showPage(currentPage)
+    }
+
+    private fun connectSelectedIndexFeed() {
+        if (selectedIndex == "NIFTY") {
+            val serviceFeed = niftyServiceFeed
+            if (serviceFeed != null) attachMarketDataFeed(serviceFeed)
+            else updateFeedStatus(FeedConnectionState.CONNECTING, "Waiting for secure NIFTY feed service")
+            return
+        }
+        attachMarketDataFeed(IndexMarketDataFeed(selectedIndex))
+    }
+
+    private fun buildIndexSelector(): View {
+        val panel = card()
+        panel.addView(text("SELECT MARKET INDEX", 10f, cyan, true))
+        addGap(panel, 7)
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        listOf("NIFTY", "BANKNIFTY", "FINNIFTY").forEach { symbol ->
+            val active = symbol == selectedIndex
+            val chip = TextView(this).apply {
+                text = if (symbol == "NIFTY") "NIFTY 50" else symbol
+                textSize = 11f
+                typeface = selectedTypeface(Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setTextColor(if (active) Color.BLACK else muted)
+                background = rounded(if (active) cyan else surface2, if (active) cyan else border, 12)
+                setPadding(dp(7), dp(11), dp(7), dp(11))
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { selectMarketIndex(symbol) }
+            }
+            row.addView(chip, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+                if (symbol != "NIFTY") leftMargin = dp(6)
+            })
+        }
+        panel.addView(row)
+        return panel
     }
 
     private fun buildPageHeading(title: String, subtitle: String): View =
@@ -984,7 +1059,7 @@ class MainActivity : FragmentActivity() {
             setPadding(dp(11), 0, 0, 0)
         }
         brand.addView(text("MGrow", 27f, white, true))
-        brand.addView(text("NIFTY 50  •  UPSTOX LIVE DATA", 10f, blueAccent, true))
+        brand.addView(text("${selectedIndexLabel()}  •  UPSTOX READ-ONLY DATA", 10f, blueAccent, true))
         header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         feedStatusView = pill("● CONNECTING", blueAccent).apply {
             background = rounded(Color.rgb(12, 43, 70), blueAccent, 30)
@@ -996,7 +1071,7 @@ class MainActivity : FragmentActivity() {
         val market = card().apply {
             background = rounded(Color.rgb(9, 30, 58), blueAccent, 22)
         }
-        market.addView(text("NIFTY 50  •  LIVE INDEX VALUE", 12f, blueAccent, true))
+        market.addView(text("${selectedIndexLabel()}  •  INDEX VALUE", 12f, blueAccent, true))
         addGap(market, 10)
         indexPriceView = text("— — —", 36f, white, true)
         market.addView(indexPriceView)
@@ -1051,7 +1126,7 @@ class MainActivity : FragmentActivity() {
         root.addView(health)
         addGap(root, 14)
         val chartSection = card()
-        chartSection.addView(text("NIFTY LIVE CHART", 12f, blueAccent, true))
+        chartSection.addView(text("${selectedIndexLabel()} CHART", 12f, blueAccent, true))
         addGap(chartSection, 8)
         chartSection.addView(buildChartCard())
         root.addView(chartSection)
