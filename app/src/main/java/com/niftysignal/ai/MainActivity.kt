@@ -425,13 +425,14 @@ class MainActivity : FragmentActivity() {
 
         // All AI panels consume the same validated CentralMarketState.
         // Stale snapshots are explicitly paused and never produce a live signal.
-        val decision = central.signalDecision
-        val indicators = decision.indicators
+        val technical = central.signalDecision
+        val unified = central.unifiedAiDecision
+        val indicators = technical.indicators
         val liveAnalysis = central.isLive
         if (::signalBiasView.isInitialized) {
-            signalBiasView.text = if (liveAnalysis) decision.bias.name else "WAIT"
+            signalBiasView.text = if (liveAnalysis) unified.bias.name else "WAIT"
             signalBiasView.setTextColor(
-                if (!liveAnalysis) amber else when (decision.bias) {
+                if (!liveAnalysis) amber else when (unified.bias) {
                     TradeBias.BUY_CE -> green
                     TradeBias.BUY_PE -> red
                     else -> amber
@@ -439,34 +440,26 @@ class MainActivity : FragmentActivity() {
             )
         }
         if (::signalStatusView.isInitialized) {
-            signalStatusView.text = when {
-                !liveAnalysis -> "AI PAUSED • NOT LIVE"
-                decision.confirmed -> "SETUP DETECTED • REVIEW"
-                else -> "WAIT • CONFIRMATION NEEDED"
-            }
-            signalStatusView.setTextColor(if (!liveAnalysis) amber else if (decision.confirmed) green else amber)
+            signalStatusView.text = if (liveAnalysis) unified.status else "AI PAUSED • NOT LIVE"
+            signalStatusView.setTextColor(
+                if (!liveAnalysis || unified.bias == TradeBias.WAIT) amber else green
+            )
         }
         if (::signalReasonView.isInitialized) {
-            signalReasonView.text = if (liveAnalysis) decision.reasons.joinToString(" • ")
-                else central.staleReason ?: "Waiting for fresh validated market data."
+            signalReasonView.text = if (liveAnalysis) {
+                (unified.reasons + unified.warnings).joinToString(" • ")
+            } else central.staleReason ?: "Waiting for fresh validated market data."
         }
         if (::signalTrendValueView.isInitialized) signalTrendValueView.text =
-            if (liveAnalysis) decision.trend else "PAUSED"
+            if (liveAnalysis) technical.trend else "PAUSED"
         if (::signalSetupValueView.isInitialized) signalSetupValueView.text =
-            if (liveAnalysis) if (decision.confirmed) "CONFIRMED" else "WAIT" else "PAUSED"
+            if (liveAnalysis) unified.alignmentScore?.let { "CONFLUENCE $it%" } ?: "WAIT" else "PAUSED"
         if (::signalConfirmValueView.isInitialized) {
-            val oneMinute = snapshot.oneMinuteCandles
             signalConfirmValueView.text = when {
                 !liveAnalysis -> "PAUSED"
-                oneMinute.isEmpty() -> "1M N/A"
-                else -> {
-                    val candle = oneMinute.last()
-                    when {
-                        candle.close > candle.open -> "1M BULLISH"
-                        candle.close < candle.open -> "1M BEARISH"
-                        else -> "1M NEUTRAL"
-                    }
-                }
+                unified.status == "ALL MODULES ALIGNED" -> "AI ALIGNED"
+                unified.status == "CONFLICT • WAIT" -> "CONFLICT • WAIT"
+                else -> "PARTIAL / WAIT"
             }
         }
 
@@ -1240,26 +1233,28 @@ class MainActivity : FragmentActivity() {
 
     private fun buildEntryRiskTargetCard(): View {
         val box = card()
-        box.addView(text("RULE-BASED AI REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
-        val snap = latestSnapshot; val candles = snap?.fiveMinuteCandles.orEmpty()
-        val decision = centralMarketState?.takeIf { it.isLive }?.signalDecision
-        if (snap == null || snap.isStale || decision == null || !decision.confirmed || decision.bias == TradeBias.WAIT) {
-            box.addView(text("WAIT • Fresh confirmed market conditions required.", 13f, amber, true))
-            box.addView(text("No entry, stop-loss or target while data is stale or setup is unconfirmed.", 10f, muted))
+        box.addView(text("CENTRAL AI REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
+        val central = centralMarketState?.takeIf { it.isLive }
+        val unified = central?.unifiedAiDecision
+        val levels = unified?.referenceLevels
+        if (central == null || unified == null || unified.bias == TradeBias.WAIT || levels == null) {
+            box.addView(text("WAIT • Central AI has not approved a unified setup.", 13f, amber, true))
+            box.addView(text("No entry, stop or target is shown when the engines conflict, confirmation is missing, or data is stale.", 10f, muted))
             return box
         }
-        val last = candles.last()
-        val vol = centralMarketState?.averageRange14?.takeIf { it.isFinite() && it > 0.0 }
-        if (vol == null) { box.addView(text("Reference levels unavailable: insufficient volatility data.", 11f, amber)); return box }
-        val bull = decision.bias == TradeBias.BUY_CE; val entry = last.close
-        val stop = if (bull) entry - vol else entry + vol; val target = if (bull) entry + vol * 1.5 else entry - vol * 1.5
-        box.addView(text(if (bull) "BULLISH SETUP" else "BEARISH SETUP", 13f, if (bull) green else red, true)); addGap(box, 7)
+        box.addView(text(
+            "${levels.direction.name} • ${unified.status}",
+            12f, if (levels.direction == TradeBias.BUY_CE) green else red, true
+        )); addGap(box, 7)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(metric("ENTRY REF.", formatMarketValue(entry)), LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(metric("STOP REF.", formatMarketValue(stop), red), LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(metric("TARGET REF.", formatMarketValue(target), green), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(metric("ENTRY REF.", formatMarketValue(levels.entry)), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(metric("STOP REF.", formatMarketValue(levels.stop), red), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(metric("TARGET REF.", formatMarketValue(levels.target), green), LinearLayout.LayoutParams(0, -2, 1f))
         box.addView(row); addGap(box, 7)
-        box.addView(text("NIFTY index reference levels, not option premium. Indicative only; no order instruction or guaranteed outcome.", 9f, amber))
+        box.addView(text(
+            "Central engine reference only • R:R 1:${String.format(java.util.Locale.US, "%.1f", levels.riskReward)} • NIFTY index levels, not option premium. No order instruction.",
+            9f, amber
+        ))
         return box
     }
 
@@ -1325,15 +1320,23 @@ class MainActivity : FragmentActivity() {
             box.addView(text(item.detail, 9f, muted))
             addGap(box, 5)
         }
-        val advanced = centralMarketState?.advancedSignalResult
-        if (advanced != null) {
+        val central = centralMarketState
+        val unified = central?.unifiedAiDecision
+        if (central != null && unified != null) {
             addGap(box, 7)
             box.addView(text(
-                "ADVANCED AI v1 • ${advanced.bias.name} • ${advanced.confidenceLabel}",
-                10f, if (advanced.bias == TradeBias.WAIT) amber else cyan, true
+                "CENTRAL AI RESULT • ${unified.bias.name} • ${unified.status}",
+                10f, if (unified.bias == TradeBias.WAIT) amber else cyan, true
             ))
-            advanced.reasons.take(2).forEach { box.addView(text(it, 9f, muted)) }
-            advanced.warnings.forEach { box.addView(text(it, 9f, amber)) }
+            unified.alignmentScore?.let {
+                box.addView(text("Rule-based confluence: $it/100 • not win probability", 9f, muted))
+            }
+            box.addView(text(
+                "Option-chain PCR: ${unified.optionChainPcr?.let { String.format(java.util.Locale.US, "%.2f", it) } ?: "NOT INCLUDED"}",
+                9f, muted
+            ))
+            unified.warnings.forEach { box.addView(text(it, 9f, amber)) }
+            box.addView(text("Detection checks are supporting evidence only; they do not issue separate BUY CE / BUY PE decisions.", 9f, muted))
         }
         box.addView(text(
             "Scores हे heuristic analysis आहेत; नफ्याची शक्यता किंवा verified win-rate नाहीत. OI फक्त recent Upstox API snapshot मधून; News verified source नसल्यास DATA UNAVAILABLE.",
@@ -2159,7 +2162,7 @@ class MainActivity : FragmentActivity() {
 
     private fun buildInsights(): View {
         val box = card()
-        box.addView(text("MARKET BIAS", 10f, muted, true))
+        box.addView(text("MARKET REGIME • SUPPORTING INPUT", 10f, muted, true))
         marketBiasView = text("Awaiting validated 5-minute candles", 16f, white, true)
         box.addView(marketBiasView)
         addGap(box, 6)
@@ -2188,7 +2191,7 @@ class MainActivity : FragmentActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        titleRow.addView(text("NEXT 5-MINUTE CANDLE", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        titleRow.addView(text("NEXT 5-MINUTE CANDLE • SUPPORTING INPUT", 11f, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
         titleRow.addView(helpButton(
             "SMART AI NEXT CANDLE",
             "पुढील 5 मिनिटांच्या candle ची दिशा 5M indicators, market trend, support/resistance, price action आणि 1M retest/rejection वापरून अंदाजली जाते. Option Chain live उपलब्ध नसेल तर तो वापरला जात नाही. WAIT म्हणजे पुरेशी पुष्टी नाही.",
