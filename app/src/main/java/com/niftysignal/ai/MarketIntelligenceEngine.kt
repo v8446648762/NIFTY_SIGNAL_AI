@@ -37,7 +37,7 @@ object MarketIntelligenceEngine {
         val bias = when {
             ema21 != null && ema9 > ema21 && rsi >= 50.0 -> "BULLISH"
             ema21 != null && ema9 < ema21 && rsi <= 50.0 -> "BEARISH"
-            ema21 == null && latestCloseAboveEma(closes.last(), ema9) && rsi >= 50.0 -> "BULLISH (EARLY)"
+            ema21 == null && closes.last() > ema9 && rsi >= 50.0 -> "BULLISH (EARLY)"
             ema21 == null && closes.last() < ema9 && rsi <= 50.0 -> "BEARISH (EARLY)"
             else -> "SIDEWAYS / MIXED"
         }
