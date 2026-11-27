@@ -459,6 +459,8 @@ class MainActivity : FragmentActivity() {
                 !liveAnalysis -> "PAUSED"
                 unified.status == "ALL MODULES ALIGNED" -> "AI ALIGNED"
                 unified.status == "CONFLICT • WAIT" -> "CONFLICT • WAIT"
+                unified.status.startsWith("HIGH RISK") -> "HIGH RISK • WAIT"
+                unified.bias == TradeBias.WAIT -> "CENTRAL WAIT"
                 else -> "PARTIAL / WAIT"
             }
         }
@@ -2223,8 +2225,7 @@ class MainActivity : FragmentActivity() {
         }
         val label = when {
             central?.isLive != true -> "PAUSED • NOT LIVE"
-            unified?.status == "CONFLICT • WAIT" -> "CONFLICT • CENTRAL AI SAYS WAIT"
-            unified?.bias == TradeBias.WAIT -> "WAIT • PRIMARY SETUP NOT CONFIRMED"
+            unified?.bias == TradeBias.WAIT -> unified.status
             aligned -> "NEXT-CANDLE MODEL ALIGNS WITH CENTRAL AI"
             direction == NextCandleDirection.WAIT -> "NEXT-CANDLE CONFIRMATION WAITING"
             else -> "NEXT-CANDLE MODEL DISAGREES • CENTRAL AI WAIT"
