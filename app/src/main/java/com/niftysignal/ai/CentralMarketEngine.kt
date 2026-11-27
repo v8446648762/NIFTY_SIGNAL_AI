@@ -236,6 +236,14 @@ object CentralMarketEngine {
             candleBias == technical.bias,
             advanced.bias == technical.bias
         ).count { it }
+        if (confirmations == 0) {
+            return UnifiedAiDecision(
+                TradeBias.WAIT, "WAIT • CONFLUENCE NOT CONFIRMED", 0,
+                technical.reasons,
+                listOf("Neither the next-candle model nor the options-aware model confirms the primary setup."),
+                advanced.optionChainPcr, risk, null
+            )
+        }
         val alignment = 60 + confirmations * 20
         val status = when (confirmations) {
             2 -> "ALL MODULES ALIGNED"
