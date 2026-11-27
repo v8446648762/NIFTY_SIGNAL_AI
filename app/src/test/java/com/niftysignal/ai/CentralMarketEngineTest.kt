@@ -56,6 +56,8 @@ class CentralMarketEngineTest {
         assertFalse(state!!.isLive)
         assertEquals(TradeBias.WAIT, state.signalDecision.bias)
         assertFalse(state.signalDecision.confirmed)
+        assertEquals(TradeBias.WAIT, state.advancedSignalResult.bias)
+        assertEquals("STALE / PAUSED", state.advancedSignalResult.trend)
         assertNull(state.riskAssessment)
         assertTrue(state.aiPerformanceReport.detections.all { it.score == null })
     }
