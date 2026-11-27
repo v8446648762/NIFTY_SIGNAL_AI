@@ -658,16 +658,93 @@ class MainActivity : FragmentActivity() {
             .getBoolean("pro_panel_$panelNumber", true)
 
     private fun showPage(page: String) {
-        currentPage = "Live Data"
+        val allowedPages = setOf("Home", "AI", "Chart", "Options", "More")
+        currentPage = page.takeIf { it in allowedPages } ?: "Home"
         pageContent.removeAllViews()
-        pageContent.addView(buildHomeDashboard())
+        when (currentPage) {
+            "Home" -> pageContent.addView(buildHomeDashboard())
+            "AI" -> {
+                pageContent.addView(buildPageHeading("AI INTELLIGENCE", "Validated NIFTY intraday analysis"))
+                pageContent.addView(buildSignalCard()); addGap(pageContent, 12)
+                pageContent.addView(buildInsights()); addGap(pageContent, 12)
+                pageContent.addView(buildNextCandleCard()); addGap(pageContent, 12)
+                pageContent.addView(buildRiskMeter()); addGap(pageContent, 12)
+                pageContent.addView(buildEntryRiskTargetCard()); addGap(pageContent, 12)
+                pageContent.addView(buildAiDetectionCenter())
+            }
+            "Chart" -> {
+                pageContent.addView(buildPageHeading("CHART & INDICATORS", "Live candles and technical studies"))
+                pageContent.addView(buildChartCard()); addGap(pageContent, 12)
+                pageContent.addView(buildIndicators()); addGap(pageContent, 12)
+                pageContent.addView(buildLevels()); addGap(pageContent, 12)
+                pageContent.addView(buildAdvancedMarketStudies())
+            }
+            "Options" -> {
+                pageContent.addView(buildPageHeading("NIFTY OPTION CHAIN", "Read-only Upstox option-chain snapshot"))
+                val panel = card()
+                panel.addView(text("LIVE OPTION CHAIN", 12f, cyan, true)); addGap(panel, 8)
+                panel.addView(text("View strikes, CE / PE OI, PCR and available option-chain snapshot data. This is market analysis only; no broker orders are placed.", 11f, muted))
+                addGap(panel, 12)
+                panel.addView(Button(this).apply {
+                    text = "OPEN OPTION CHAIN"
+                    setOnClickListener { startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java)) }
+                }, LinearLayout.LayoutParams(-1, dp(48)))
+                pageContent.addView(panel)
+            }
+            "More" -> {
+                pageContent.addView(buildPageHeading("MORE TOOLS", "Reports, alerts and app preferences"))
+                pageContent.addView(buildReports()); addGap(pageContent, 12)
+                pageContent.addView(buildAlerts()); addGap(pageContent, 12)
+                pageContent.addView(buildSystemHealthPanel()); addGap(pageContent, 12)
+                pageContent.addView(buildNewsUnavailablePanel()); addGap(pageContent, 12)
+                pageContent.addView(buildSettings())
+            }
+        }
+        renderBottomNavigation()
         latestSnapshot?.let { applyMarketSnapshot(it) }
-        bottomNav.visibility = View.GONE
     }
+
+    private fun buildPageHeading(title: String, subtitle: String): View =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(2), dp(7), dp(2), dp(15))
+            addView(text(title, 20f, white, true))
+            addView(text(subtitle, 11f, muted))
+        }
 
     private fun renderBottomNavigation() {
         bottomNav.removeAllViews()
-        bottomNav.visibility = View.GONE
+        bottomNav.orientation = LinearLayout.HORIZONTAL
+        bottomNav.setPadding(dp(5), dp(5), dp(5), dp(5))
+        bottomNav.background = rounded(Color.argb(245, 10, 19, 31), border, 16)
+        val items = listOf(
+            "Home" to "⌂",
+            "AI" to "✧",
+            "Chart" to "▥",
+            "Options" to "◈",
+            "More" to "•••"
+        )
+        items.forEach { (page, symbol) ->
+            val selected = currentPage == page
+            val item = TextView(this).apply {
+                text = "$symbol\n$page"
+                gravity = Gravity.CENTER
+                textSize = 10f
+                setLineSpacing(0f, 0.95f)
+                typeface = selectedTypeface(if (selected) Typeface.BOLD else Typeface.NORMAL)
+                setTextColor(if (selected) cyan else muted)
+                setPadding(dp(2), dp(7), dp(2), dp(7))
+                background = if (selected) rounded(Color.argb(220, 28, 47, 73), cyan, 12) else null
+                isClickable = true
+                isFocusable = true
+                contentDescription = "$page section"
+                setOnClickListener { showPage(page) }
+            }
+            bottomNav.addView(item, LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                leftMargin = dp(2); rightMargin = dp(2)
+            })
+        }
+        bottomNav.visibility = View.VISIBLE
     }
 
     private fun buildFeatureGrid(): View {
