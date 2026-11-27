@@ -1,5 +1,9 @@
 const UPSTOX_OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain";
-const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
+const INDEX_OPTION_KEYS: Record<string, string> = {
+  NIFTY: "NSE_INDEX|Nifty 50",
+  BANKNIFTY: "NSE_INDEX|Nifty Bank",
+  FINNIFTY: "NSE_INDEX|Nifty Fin Service",
+};
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_STRIKES = 200;
 
@@ -38,7 +42,7 @@ export function validateOptionExpiry(value: string | null): string | null {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : null;
 }
 
-/** Strictly normalizes the fixed NIFTY 50 option-chain response. */
+/** Strictly normalizes an Upstox index option-chain response. */
 export function extractValidOptionChain(payload: unknown): {
   expiry: string;
   spotPrice: number;
@@ -109,12 +113,14 @@ export function extractValidOptionChain(payload: unknown): {
   return { expiry, spotPrice, strikes };
 }
 
-export async function fetchNiftyOptionChain(expiry: string, token: string): Promise<unknown> {
+export async function fetchIndexOptionChain(symbol: string, expiry: string, token: string): Promise<unknown> {
+  const instrumentKey = INDEX_OPTION_KEYS[symbol];
+  if (!instrumentKey) throw new Error("Unsupported index option chain");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const query = new URLSearchParams({
-      instrument_key: NIFTY_50_KEY,
+      instrument_key: instrumentKey,
       expiry_date: expiry,
     });
     const response = await fetch(`${UPSTOX_OPTION_CHAIN_URL}?${query.toString()}`, {
