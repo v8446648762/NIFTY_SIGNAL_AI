@@ -815,6 +815,27 @@ class MainActivity : FragmentActivity() {
         chartSection.addView(buildChartCard())
         root.addView(chartSection)
         addGap(root, 12)
+        val optionChainCard = card().apply {
+            background = rounded(Color.rgb(10, 27, 45), Color.rgb(48, 119, 171), 18)
+        }
+        optionChainCard.addView(text("NIFTY OPTION CHAIN", 12f, blueAccent, true))
+        addGap(optionChainCard, 6)
+        optionChainCard.addView(text(
+            "Read-only Upstox option-chain snapshot • cached last available data • automatic 30-second refresh while open",
+            10f, muted
+        ))
+        addGap(optionChainCard, 8)
+        val openOptionChain = Button(this).apply {
+            text = "OPEN OPTION CHAIN"
+            setTextColor(Color.WHITE)
+            background = rounded(Color.rgb(17, 65, 105), blueAccent, 12)
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, LiveOptionChainActivity::class.java))
+            }
+        }
+        optionChainCard.addView(openOptionChain, LinearLayout.LayoutParams(-1, dp(46)))
+        root.addView(optionChainCard)
+        addGap(root, 12)
         root.addView(buildDateTimeView().apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(4), 0, dp(4))
