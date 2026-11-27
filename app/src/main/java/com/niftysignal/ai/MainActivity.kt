@@ -717,6 +717,8 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun buildHomeDashboard(): View {
+        val blueAccent = Color.rgb(65, 176, 255)
+        val blueText = Color.rgb(190, 224, 250)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(8), 0, dp(18))
@@ -726,42 +728,45 @@ class MainActivity : FragmentActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val logo = TextView(this).apply {
+            text = "M"
+            textSize = 22f
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = rounded(Color.rgb(17, 65, 105), blueAccent, 14)
+            layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+        }
+        header.addView(logo)
+        addGap(header, 0)
+        val brand = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(11), 0, 0, 0)
+        }
         brand.addView(text("MGrow", 27f, white, true))
-        brand.addView(text("NIFTY 50 • UPSTOX LIVE DATA", 10f, cyan, true))
+        brand.addView(text("NIFTY 50  •  UPSTOX LIVE DATA", 10f, blueAccent, true))
         header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
-        feedStatusView = pill("● CONNECTING", cyan)
+        feedStatusView = pill("● CONNECTING", blueAccent).apply {
+            background = rounded(Color.rgb(12, 43, 70), blueAccent, 30)
+        }
         header.addView(feedStatusView)
         root.addView(header)
         addGap(root, 18)
 
-        val connection = card()
-        connection.addView(text("MARKET DATA CONNECTION", 12f, cyan, true))
-        addGap(connection, 8)
-        workerConnectionDetailView = text("Upstox Worker • Connecting securely…", 12f, amber, true)
-        connection.addView(workerConnectionDetailView)
-        addGap(connection, 6)
-        connection.addView(text(
-            "Read-only data • Automatic reconnect • Stale data is never marked LIVE",
-            10f, muted
-        ))
-        root.addView(connection)
-        addGap(root, 14)
-
         val market = card().apply {
-            background = rounded(Color.rgb(8, 22, 20), green, 20)
+            background = rounded(Color.rgb(9, 30, 58), blueAccent, 22)
         }
-        market.addView(text("NIFTY 50 • LIVE INDEX VALUE", 12f, cyan, true))
-        addGap(market, 8)
-        indexPriceView = text("— — —", 34f, white, true)
+        market.addView(text("NIFTY 50  •  LIVE INDEX VALUE", 12f, blueAccent, true))
+        addGap(market, 10)
+        indexPriceView = text("— — —", 36f, white, true)
         market.addView(indexPriceView)
         addGap(market, 5)
-        indexHintView = text("Waiting for validated Upstox market data", 11f, muted)
+        indexHintView = text("Waiting for validated Upstox market data", 11f, blueText)
         market.addView(indexHintView)
-        addGap(market, 14)
+        addGap(market, 18)
 
         val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        metrics.addView(dynamicMetric("CHANGE", "—", muted) { changeValueView = it },
+        metrics.addView(dynamicMetric("CHANGE", "—", blueAccent) { changeValueView = it },
             LinearLayout.LayoutParams(0, -2, 1f))
         metrics.addView(dynamicMetric("DAY HIGH", "—", white) { dayHighValueView = it },
             LinearLayout.LayoutParams(0, -2, 1f))
@@ -771,23 +776,41 @@ class MainActivity : FragmentActivity() {
         root.addView(market)
         addGap(root, 14)
 
-        val health = card()
-        health.addView(text("VALIDATED FEED DETAILS", 12f, cyan, true))
-        addGap(health, 8)
+        val connection = card().apply {
+            background = rounded(Color.rgb(12, 31, 51), Color.rgb(48, 119, 171), 18)
+        }
+        connection.addView(text("LIVE DATA CONNECTION", 12f, blueAccent, true))
+        addGap(connection, 8)
+        workerConnectionDetailView = text("Upstox Worker • Connecting securely…", 12f, blueText, true)
+        connection.addView(workerConnectionDetailView)
+        addGap(connection, 7)
+        connection.addView(text(
+            "Read-only feed  •  Automatic reconnect  •  Stale data is never marked LIVE",
+            10f, muted
+        ))
+        root.addView(connection)
+        addGap(root, 14)
+
+        val health = card().apply {
+            background = rounded(Color.rgb(10, 27, 45), Color.rgb(48, 119, 171), 18)
+        }
+        health.addView(text("MARKET DATA DETAILS", 12f, blueAccent, true))
+        addGap(health, 9)
         candleCountsView = text("5-minute candles: waiting\n1-minute candles: waiting", 11f, white)
         health.addView(candleCountsView)
-        addGap(health, 6)
-        receiptAgeView = text("Last data receipt: waiting", 11f, muted)
+        addGap(health, 7)
+        receiptAgeView = text("Last data receipt: waiting", 11f, blueText)
         health.addView(receiptAgeView)
-        addGap(health, 10)
+        addGap(health, 12)
         health.addView(text(
-            "MGrow फक्त NIFTY Live Data दाखवते. कोणतेही AI signals, orders किंवा trading execution नाही.",
-            11f, amber, true
+            "LIVE DATA ONLY  •  BROKER ACCESS READ ONLY  •  NO BUY/SELL EXECUTION",
+            10f, blueAccent, true
         ))
         root.addView(health)
-        addGap(root, 16)
-        root.addView(text("LIVE DATA ONLY • NO BUY/SELL ORDER EXECUTION", 10f, amber, true).apply {
+        addGap(root, 12)
+        root.addView(buildDateTimeView().apply {
             gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(4))
         })
         return root
     }
