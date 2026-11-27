@@ -12,7 +12,7 @@ class MarketIntelligenceEngineTest {
     @Test fun calculatesTrendMomentumAndRiskFromValidatedCandles() {
         val result = MarketIntelligenceEngine.evaluate(risingCandles())
         assertNotNull(result)
-        assertEquals("BULLISH (EARLY)", result!!.bias)
+        assertEquals("BULLISH", result!!.bias)
         assertEquals("BULLISH", result.supertrend)
         assertEquals("BULLISH", result.macd)
         assertNotNull(result.adx)
@@ -23,7 +23,7 @@ class MarketIntelligenceEngineTest {
     @Test fun keepsIndependentStudiesAvailableWhileLongerIndicatorsWarmUp() {
         val result = MarketIntelligenceEngine.evaluate(risingCandles(18))
         assertNotNull(result)
-        assertEquals("BULLISH", result!!.bias)
+        assertEquals("BULLISH (EARLY)", result!!.bias)
         assertEquals("BULLISH", result.supertrend)
         assertEquals("WARMING UP (<34 candles)", result.macd)
         assertEquals("WARMING UP (<21 candles)", result.breakoutStatus)
