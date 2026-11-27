@@ -74,6 +74,7 @@ class LiveOptionChainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildScreen()
+        loadLastAvailableSnapshot()
         executor = Executors.newSingleThreadScheduledExecutor()
         executor?.scheduleWithFixedDelay({ fetchSnapshot() }, 0L, POLL_SECONDS, TimeUnit.SECONDS)
     }
@@ -198,8 +199,12 @@ class LiveOptionChainActivity : Activity() {
             if (rows.isEmpty()) throw IllegalStateException("No valid option-chain strike rows received")
             val snapshot = ChainSnapshot(root.optString("expiryDate"), spot, receivedAt, rows)
             latestSnapshot = snapshot
+            getSharedPreferences("mgrow_option_chain", MODE_PRIVATE).edit()
+                .putString("last_snapshot", root.toString())
+                .putString("last_expiry", selectedExpiry)
+                .apply()
             publishToCentralEngine(snapshot)
-            runOnUiThread { renderSnapshot(snapshot) }
+            runOnUiThread { renderSnapshot(snapshot, cached = false) }
         } catch (error: Exception) {
             val message = error.message ?: "Unable to refresh option chain"
             runOnUiThread {
@@ -209,6 +214,33 @@ class LiveOptionChainActivity : Activity() {
         } finally {
             connection?.disconnect()
             requestInFlight = false
+        }
+    }
+
+    private fun loadLastAvailableSnapshot() {
+        val prefs = getSharedPreferences("mgrow_option_chain", MODE_PRIVATE)
+        val raw = prefs.getString("last_snapshot", null) ?: return
+        val savedExpiry = prefs.getString("last_expiry", "current_week") ?: "current_week"
+        selectedExpiry = savedExpiry
+        val position = listOf("current_week", "next_week", "far_week", "current_month", "next_month", "far_month")
+            .indexOf(savedExpiry).coerceAtLeast(0)
+        if (::expiryPicker.isInitialized) expiryPicker.setSelection(position)
+        runCatching {
+            val root = JSONObject(raw)
+            require(root.optString("provider").equals("upstox", true))
+            val spot = root.optDouble("spotPrice", Double.NaN)
+            require(spot.isFinite() && spot > 0.0)
+            val rows = parseRows(root.optJSONArray("strikes") ?: JSONArray())
+            require(rows.isNotEmpty())
+            val receivedAt = root.optLong("receivedAtEpochMs", 0L)
+            require(receivedAt > 0L && receivedAt <= System.currentTimeMillis() + 5_000L)
+            ChainSnapshot(root.optString("expiryDate"), spot, receivedAt, rows)
+        }.onSuccess { cached ->
+            latestSnapshot = cached
+            renderSnapshot(cached, cached = true)
+        }.onFailure {
+            statusView.text = "NO VALID CACHED OPTION-CHAIN SNAPSHOT • FETCHING…"
+            statusView.setTextColor(AMBER)
         }
     }
 
@@ -273,10 +305,15 @@ class LiveOptionChainActivity : Activity() {
         return result.sortedBy { it.strike }
     }
 
-    private fun renderSnapshot(snapshot: ChainSnapshot) {
+    private fun renderSnapshot(snapshot: ChainSnapshot, cached: Boolean) {
         val age = (System.currentTimeMillis() - snapshot.receivedAtMillis).coerceAtLeast(0L)
-        statusView.text = "RECENT API SNAPSHOT • ${snapshot.expiry} • fetched ${age / 1000}s ago • NOT TICK-VERIFIED"
-        statusView.setTextColor(GREEN)
+        val lastAvailable = cached || age > MAX_SNAPSHOT_AGE_MS
+        statusView.text = if (lastAvailable) {
+            "MARKET CLOSED / LAST AVAILABLE SNAPSHOT • ${snapshot.expiry} • NOT LIVE"
+        } else {
+            "RECENT UPSTOX API SNAPSHOT • ${snapshot.expiry} • NOT TICK-VERIFIED"
+        }
+        statusView.setTextColor(if (lastAvailable) AMBER else GREEN)
 
         val totalCall = snapshot.rows.sumOf { it.callOi ?: 0.0 }
         val totalPut = snapshot.rows.sumOf { it.putOi ?: 0.0 }
