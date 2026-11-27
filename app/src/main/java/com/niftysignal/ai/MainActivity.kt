@@ -474,7 +474,7 @@ class MainActivity : FragmentActivity() {
 
         updateMarketIntelligence(if (liveAnalysis) central.marketIntelligence else null)
         updateNextCandlePrediction(if (liveAnalysis) central.nextCandlePrediction else null)
-        updateRiskMeter(if (liveAnalysis) central.riskAssessment else null)
+        updateRiskMeter(if (liveAnalysis) unified.riskAssessment else null)
 
     }
 
