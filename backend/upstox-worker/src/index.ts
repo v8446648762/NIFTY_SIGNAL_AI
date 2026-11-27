@@ -1,4 +1,4 @@
-import { extractValidOptionChain, fetchNiftyOptionChain, validateOptionExpiry } from "./option-chain.js";
+import { extractValidOptionChain, fetchNiftyOptionChain, validateOptionExpiry, UpstreamOptionChainHttpError } from "./option-chain.js";
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
@@ -81,10 +81,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (error instanceof Error && error.name === "AbortError") {
         return json({ error: "upstream_option_chain_timeout" }, 504);
       }
-      if (error instanceof Error && error.message === "upstream_rate_limited") {
-        return json({ error: "upstream_rate_limited" }, 429, { "retry-after": "60" });
+      if (error instanceof UpstreamOptionChainHttpError) {
+        if (error.upstreamStatus === 429) {
+          return json({ error: "upstream_rate_limited", upstreamStatus: 429, ...(error.upstreamCode ? { upstreamCode: error.upstreamCode } : {}), ...(error.message ? { upstreamMessage: error.message } : {}) }, 429, { "retry-after": "60" });
+        }
+        return json({ error: "upstream_option_chain_request_failed", upstreamStatus: error.upstreamStatus, ...(error.upstreamCode ? { upstreamCode: error.upstreamCode } : {}), ...(error.message ? { upstreamMessage: error.message } : {}) }, 502);
       }
-      return json({ error: "upstream_option_chain_request_failed" }, 502);
+      return json({ error: "upstream_option_chain_request_failed", upstreamStatus: null }, 502);
     }
   }
 
