@@ -136,7 +136,7 @@ export async function fetchNiftyOptionChain(expiry: string, token: string): Prom
         const code = first?.errorCode ?? first?.code ?? parsed.errorCode ?? parsed.code;
         const message = first?.message ?? parsed.message ?? parsed.error;
         if (typeof code === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(code)) upstreamCode = code;
-        if (typeof message === "string") safeMessage = message.replace(/Bearer\\s+\\S+/gi, "Bearer [redacted]").replace(/[\\r\\n]+/g, " ").slice(0, 160);
+        if (typeof message === "string") safeMessage = message.replace(/Bearer\s+\S+/gi, "Bearer [redacted]").replace(/[\r\n]+/g, " ").slice(0, 160);
       } catch { /* Never return arbitrary upstream response bodies. */ }
       throw new UpstreamOptionChainHttpError(response.status, upstreamCode, safeMessage);
     }
