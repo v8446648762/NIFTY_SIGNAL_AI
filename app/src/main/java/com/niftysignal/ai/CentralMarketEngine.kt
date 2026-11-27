@@ -58,28 +58,11 @@ object CentralMarketEngine {
     }
 
     fun evaluate(snapshot: MarketDataSnapshot, nowMillis: Long): CentralMarketState? {
-        val candles5m = snapshot.fiveMinuteCandles
-        val candles1m = snapshot.oneMinuteCandles
-        if (candles5m.isEmpty() || !validSeries(candles5m) ||
-            (candles1m.isNotEmpty() && !validSeries(candles1m))) return null
-
-        val receiptAge = nowMillis - snapshot.receivedAtMillis
-        val fiveMinuteEnd = candles5m.last().timestampMillis + 300_000L
-        val oneMinuteEnd = candles1m.lastOrNull()?.timestampMillis?.plus(60_000L)
-        val staleReason = when {
-            snapshot.isStale && !snapshot.staleReason.isNullOrBlank() -> snapshot.staleReason
-            snapshot.isStale -> "Upstox feed marked this snapshot stale; live analysis paused."
-            receiptAge < -5_000L -> "Market snapshot timestamp is ahead of device time."
-            receiptAge > MAX_RECEIPT_AGE_MS -> "Last feed receipt is older than 90 seconds."
-            nowMillis - fiveMinuteEnd > MAX_5M_CANDLE_AGE_MS -> "Latest completed 5-minute candle is stale."
-            oneMinuteEnd != null && nowMillis - oneMinuteEnd > MAX_1M_CANDLE_AGE_MS ->
-                "Latest completed 1-minute candle is stale; live confirmation paused."
-            else -> null
-        }
-        val canonicalSnapshot = snapshot.copy(
-            isStale = staleReason != null,
-            staleReason = staleReason
-        )
+        val coreState = CoreMarketDataEngine.validate(snapshot, nowMillis) ?: return null
+        val canonicalSnapshot = coreState.snapshot
+        val candles5m = canonicalSnapshot.fiveMinuteCandles
+        val candles1m = canonicalSnapshot.oneMinuteCandles
+        val staleReason = coreState.staleReason
         val technicalDecision = SignalEngine.evaluate(candles5m, candles1m)
         val decision = if (canonicalSnapshot.isStale) {
             technicalDecision.copy(
