@@ -11,6 +11,14 @@ data class CentralChartIndicators(
     val vwap: Double?
 )
 
+data class CentralVolumeLevel(val price: Double, val volume: Double)
+
+data class CentralVolumeProfile(
+    val pointOfControl: Double?,
+    val levels: List<CentralVolumeLevel>,
+    val available: Boolean
+)
+
 data class CentralMarketState(
     val snapshot: MarketDataSnapshot,
     val signalDecision: SignalDecision,
@@ -20,7 +28,10 @@ data class CentralMarketState(
     val advancedSignalResult: AdvancedSignalResult,
     val riskAssessment: RiskAssessment?,
     val fiveMinuteChartIndicators: CentralChartIndicators,
-    val oneMinuteChartIndicators: CentralChartIndicators
+    val oneMinuteChartIndicators: CentralChartIndicators,
+    val stochasticRsi: Double?,
+    val volumeProfile: CentralVolumeProfile,
+    val averageRange14: Double?
 ) {
     val isLive: Boolean get() = !snapshot.isStale
     val staleReason: String? get() = snapshot.staleReason
@@ -100,8 +111,56 @@ object CentralMarketEngine {
             advancedSignalResult = advancedSignal,
             riskAssessment = risk,
             fiveMinuteChartIndicators = chartIndicators(candles5m),
-            oneMinuteChartIndicators = chartIndicators(candles1m)
+            oneMinuteChartIndicators = chartIndicators(candles1m),
+            stochasticRsi = stochasticRsi(candles5m),
+            volumeProfile = volumeProfile(candles5m),
+            averageRange14 = candles5m.takeLast(14).map { it.high - it.low }
+                .average().takeIf { it.isFinite() && it > 0.0 }
         )
+    }
+
+    private fun stochasticRsi(candles: List<MarketCandle>): Double? {
+        val closes = candles.map { it.close }
+        if (closes.size < 28) return null
+        val rsiValues = mutableListOf<Double>()
+        for (end in 14 until closes.size) {
+            var gains = 0.0
+            var losses = 0.0
+            for (index in end - 13..end) {
+                val change = closes[index] - closes[index - 1]
+                if (change > 0.0) gains += change else losses -= change
+            }
+            val averageGain = gains / 14.0
+            val averageLoss = losses / 14.0
+            rsiValues += if (averageLoss == 0.0) 100.0
+                else 100.0 - 100.0 / (1.0 + averageGain / averageLoss)
+        }
+        if (rsiValues.size < 14) return null
+        val window = rsiValues.takeLast(14)
+        val low = window.minOrNull() ?: return null
+        val high = window.maxOrNull() ?: return null
+        return if (high > low) (window.last() - low) / (high - low) * 100.0 else 50.0
+    }
+
+    private fun volumeProfile(candles: List<MarketCandle>): CentralVolumeProfile {
+        val totalVolume = candles.sumOf { it.volume }
+        if (candles.isEmpty() || !totalVolume.isFinite() || totalVolume <= 0.0) {
+            return CentralVolumeProfile(null, emptyList(), false)
+        }
+        val low = candles.minOf { it.low }
+        val high = candles.maxOf { it.high }
+        val step = ((high - low) / 12.0).takeIf { it > 0.0 } ?: 1.0
+        val bins = linkedMapOf<Int, Double>()
+        candles.forEach { candle ->
+            val key = ((candle.close - low) / step).toInt().coerceIn(0, 11)
+            bins[key] = (bins[key] ?: 0.0) + candle.volume
+        }
+        val pocKey = bins.maxByOrNull { it.value }?.key
+        val poc = pocKey?.let { low + (it + 0.5) * step }
+        val levels = bins.entries.sortedByDescending { it.value }.take(4).map { entry ->
+            CentralVolumeLevel(low + (entry.key + 0.5) * step, entry.value)
+        }
+        return CentralVolumeProfile(poc, levels, true)
     }
 
     private fun validSeries(candles: List<MarketCandle>): Boolean =
