@@ -34,6 +34,7 @@ data class UnifiedAiDecision(
     val reasons: List<String>,
     val warnings: List<String>,
     val optionChainPcr: Double?,
+    val riskAssessment: RiskAssessment?,
     val referenceLevels: CentralTradeReferenceLevels?
 )
 
@@ -140,6 +141,7 @@ object CentralMarketEngine {
             decision,
             nextCandle,
             advancedSignal,
+            risk,
             averageRange14,
             candles5m.lastOrNull()?.close
         )
@@ -172,6 +174,7 @@ object CentralMarketEngine {
         technical: SignalDecision,
         nextCandle: NextCandlePrediction,
         advanced: AdvancedSignalResult,
+        risk: RiskAssessment?,
         averageRange: Double?,
         latestPrice: Double?
     ): UnifiedAiDecision {
@@ -180,7 +183,7 @@ object CentralMarketEngine {
                 TradeBias.WAIT, "PAUSED • NOT LIVE", null,
                 listOf("Central market data is stale; all AI decisions are paused."),
                 listOf("No signal, entry, stop or target is available until fresh validated data arrives."),
-                null, null
+                null, null, null
             )
         }
         if (!technical.confirmed || technical.bias == TradeBias.WAIT) {
@@ -188,7 +191,23 @@ object CentralMarketEngine {
                 TradeBias.WAIT, "WAIT • PRIMARY SETUP NOT CONFIRMED", null,
                 technical.reasons,
                 listOf("Supporting AI modules cannot create a trade direction without the primary technical setup."),
-                advanced.optionChainPcr, null
+                advanced.optionChainPcr, risk, null
+            )
+        }
+        if (risk == null) {
+            return UnifiedAiDecision(
+                TradeBias.WAIT, "WAIT • RISK ASSESSMENT UNAVAILABLE", null,
+                listOf("Central risk assessment is incomplete."),
+                listOf("No unified setup is released until all required risk inputs are validated."),
+                advanced.optionChainPcr, null, null
+            )
+        }
+        if (risk.band == RiskBand.HIGH) {
+            return UnifiedAiDecision(
+                TradeBias.WAIT, "HIGH RISK • WAIT", 0,
+                listOf("Central risk engine classified current conditions as HIGH RISK."),
+                listOf("Directional setups are blocked by the central risk gate."),
+                advanced.optionChainPcr, risk, null
             )
         }
 
@@ -209,7 +228,7 @@ object CentralMarketEngine {
                 TradeBias.WAIT, "CONFLICT • WAIT", 0,
                 technical.reasons + conflicts,
                 listOf("Conflicting model outputs are never shown as separate BUY CE / BUY PE recommendations."),
-                advanced.optionChainPcr, null
+                advanced.optionChainPcr, risk, null
             )
         }
 
@@ -244,7 +263,7 @@ object CentralMarketEngine {
         } else null
         return UnifiedAiDecision(
             technical.bias, status, alignment, reasons, warnings,
-            advanced.optionChainPcr, levels
+            advanced.optionChainPcr, risk, levels
         )
     }
 
