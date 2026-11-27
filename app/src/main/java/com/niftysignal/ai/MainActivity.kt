@@ -170,6 +170,7 @@ class MainActivity : FragmentActivity() {
     private var tf = "5 MIN"
     private var marketDataFeed: MarketDataFeed? = null
     private var latestSnapshot: MarketDataSnapshot? = null
+    private var centralMarketState: CentralMarketState? = null
     private var currentPage = "Home"
     private var lastAiSignalKey: String? = null
     private lateinit var pageContent: LinearLayout
@@ -288,6 +289,7 @@ class MainActivity : FragmentActivity() {
 
     private fun clearLiveDashboard(message: String) {
         latestSnapshot = null
+        centralMarketState = null
         if (::indexPriceView.isInitialized) indexPriceView.text = "— — — — —"
         if (::indexHintView.isInitialized) indexHintView.text = message
         if (::changeValueView.isInitialized) changeValueView.text = "—"
@@ -341,25 +343,26 @@ class MainActivity : FragmentActivity() {
         return String.format(java.util.Locale.US, "%.2f", value)
     }
 
-    private fun applyMarketSnapshot(snapshot: MarketDataSnapshot) {
-        val ageMillis = System.currentTimeMillis() - snapshot.receivedAtMillis
-        if (ageMillis < -5000L || ageMillis > 90000L) {
-            updateFeedStatus(FeedConnectionState.STALE, "Market update is older than 90 seconds; waiting for fresh data.")
-            return
-        }
-        if (snapshot.fiveMinuteCandles.isEmpty() ||
-            !snapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
-            (snapshot.oneMinuteCandles.isNotEmpty() &&
-                !snapshot.oneMinuteCandles.all(::isValidMarketCandle))
+    private fun applyMarketSnapshot(incomingSnapshot: MarketDataSnapshot) {
+        if (incomingSnapshot.fiveMinuteCandles.isEmpty() ||
+            !incomingSnapshot.fiveMinuteCandles.all(::isValidMarketCandle) ||
+            (incomingSnapshot.oneMinuteCandles.isNotEmpty() &&
+                !incomingSnapshot.oneMinuteCandles.all(::isValidMarketCandle))
         ) {
             updateFeedStatus(FeedConnectionState.ERROR, "Feed returned empty or invalid OHLCV candles.")
             return
         }
-
+        val central = CentralMarketEngine.evaluate(incomingSnapshot, System.currentTimeMillis())
+        if (central == null) {
+            updateFeedStatus(FeedConnectionState.ERROR, "Central engine rejected invalid or out-of-order market candles.")
+            return
+        }
+        centralMarketState = central
+        val snapshot = central.snapshot
         latestSnapshot = snapshot
         updateFeedStatus(
-            if (snapshot.isStale) FeedConnectionState.STALE else FeedConnectionState.LIVE,
-            snapshot.staleReason
+            if (central.isLive) FeedConnectionState.LIVE else FeedConnectionState.STALE,
+            central.staleReason
         )
 
         val latest = snapshot.fiveMinuteCandles.last()
@@ -387,13 +390,9 @@ class MainActivity : FragmentActivity() {
         if (::dayHighValueView.isInitialized) dayHighValueView.text = formatMarketValue(dayHigh)
         if (::dayLowValueView.isInitialized) dayLowValueView.text = formatMarketValue(dayLow)
 
-        val decision = SignalEngine.evaluate(snapshot.fiveMinuteCandles, snapshot.oneMinuteCandles)
+        val decision = central.signalDecision
+        val report = central.aiPerformanceReport
         if (!snapshot.isStale) {
-            val report = AdvancedAiAnalytics.evaluate(
-                snapshot.fiveMinuteCandles,
-                snapshot.oneMinuteCandles,
-                snapshot.receivedAtMillis
-            )
             val reportJson = org.json.JSONObject().apply {
                 put("capturedAt", report.capturedAtMillis)
                 put("detections", org.json.JSONArray().apply {
@@ -410,16 +409,11 @@ class MainActivity : FragmentActivity() {
                 .putString("latest_detection_report", reportJson.toString()).apply()
         }
         if (!snapshot.isStale) recordAiSignal(decision, latest.close, snapshot.receivedAtMillis)
-        val intelligence = if (snapshot.isStale) null else MarketIntelligenceEngine.evaluate(snapshot.fiveMinuteCandles)
-        val nextCandle = NextFiveMinuteCandleEngine.evaluate(
-            snapshot.fiveMinuteCandles,
-            snapshot.oneMinuteCandles,
-            intelligence,
-            snapshot.isStale
-        )
+        val intelligence = central.marketIntelligence
+        val nextCandle = central.nextCandlePrediction
         updateNextCandlePrediction(nextCandle)
         updateMarketIntelligence(intelligence)
-        updateRiskMeter(intelligence?.riskInputs)
+        updateRiskMeter(central.riskAssessment)
         val displayedBias = if (snapshot.isStale) TradeBias.WAIT else decision.bias
         val biasText = when (displayedBias) {
             TradeBias.BUY_CE -> "BUY CE"
@@ -1144,7 +1138,7 @@ class MainActivity : FragmentActivity() {
         val box = card()
         box.addView(text("RULE-BASED AI REFERENCE LEVELS", 11f, cyan, true)); addGap(box, 6)
         val snap = latestSnapshot; val candles = snap?.fiveMinuteCandles.orEmpty()
-        val decision = if (snap != null && !snap.isStale && candles.isNotEmpty()) SignalEngine.evaluate(candles, snap.oneMinuteCandles) else null
+        val decision = centralMarketState?.takeIf { it.isLive }?.signalDecision
         if (snap == null || snap.isStale || decision == null || !decision.confirmed || decision.bias == TradeBias.WAIT) {
             box.addView(text("WAIT • Fresh confirmed market conditions required.", 13f, amber, true))
             box.addView(text("No entry, stop-loss or target while data is stale or setup is unconfirmed.", 10f, muted))
@@ -1174,18 +1168,11 @@ class MainActivity : FragmentActivity() {
         box.addView(text("AUTOMATIC NIFTY DETECTIONS", 12f, cyan, true))
         addGap(box, 5)
         val snapshot = latestSnapshot
-        val report = if (snapshot == null || snapshot.isStale) {
-            AdvancedAiAnalytics.unavailable(
-                System.currentTimeMillis(),
-                if (snapshot == null) "Waiting for the first validated live NIFTY snapshot." else "Latest market snapshot is stale; waiting for fresh validated candles."
-            )
-        } else {
-            AdvancedAiAnalytics.evaluate(
-                snapshot.fiveMinuteCandles,
-                snapshot.oneMinuteCandles,
-                snapshot.receivedAtMillis
-            )
-        }
+        val report = centralMarketState?.aiPerformanceReport ?: AdvancedAiAnalytics.unavailable(
+            System.currentTimeMillis(),
+            if (snapshot == null) "Waiting for the first validated live NIFTY snapshot."
+            else "Latest market snapshot is stale; waiting for fresh validated candles."
+        )
         val visibleDetections = report.detections.filter { item ->
             val requiredPanels = when (item.name) {
                 "Chart pattern detection" -> listOf(7)
@@ -2259,8 +2246,7 @@ class MainActivity : FragmentActivity() {
 
     // The existing RiskAssessmentEngine remains the single source of truth.
     // Call this with fully validated component inputs when the live risk model is ready.
-    private fun updateRiskMeter(inputs: RiskInputs?) {
-        val assessment = inputs?.let { RiskAssessmentEngine.evaluate(it) }
+    private fun updateRiskMeter(assessment: RiskAssessment?) {
         riskGaugeView?.setAssessment(assessment)
         riskScoreView?.text = assessment?.let { "${it.score}/100" } ?: "—/100"
         riskBandView?.text = when (assessment?.band) {
@@ -2434,8 +2420,13 @@ class MainActivity : FragmentActivity() {
                     )
                 }
                 val closes = candles.map { it.close }
-                val ema9Values = TechnicalAnalysis.emaSeries(closes, 9)
-                val ema21Values = TechnicalAnalysis.emaSeries(closes, 21)
+                val chartIndicators = centralMarketState?.let {
+                    if (tf == "5 MIN") it.fiveMinuteChartIndicators else it.oneMinuteChartIndicators
+                }
+                val ema9Values = chartIndicators?.ema9Series?.takeIf { it.size == candles.size }
+                    ?: List(candles.size) { null }
+                val ema21Values = chartIndicators?.ema21Series?.takeIf { it.size == candles.size }
+                    ?: List(candles.size) { null }
                 val ema9Path = Path()
                 val ema21Path = Path()
                 var started9 = false
@@ -2455,7 +2446,7 @@ class MainActivity : FragmentActivity() {
                 c.drawPath(ema9Path, line)
                 line.color = amber
                 c.drawPath(ema21Path, line)
-                val vwap = TechnicalAnalysis.sessionVwap(candles)
+                val vwap = chartIndicators?.vwap
                 if (vwap != null) {
                     line.color = white
                     line.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5).toFloat(), dp(4).toFloat()), 0f)
