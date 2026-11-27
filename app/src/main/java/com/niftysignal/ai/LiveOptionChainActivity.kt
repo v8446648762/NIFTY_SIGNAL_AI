@@ -169,7 +169,19 @@ class LiveOptionChainActivity : Activity() {
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IllegalStateException("Option-chain server returned HTTP $code")
+            if (code !in 200..299) {
+                val detail = runCatching { JSONObject(body) }.getOrNull()
+                val upstreamStatus = detail?.optInt("upstreamStatus", code) ?: code
+                val upstreamCode = detail?.optString("upstreamCode").orEmpty()
+                val upstreamMessage = detail?.optString("upstreamMessage").orEmpty()
+                val reason = when {
+                    upstreamCode.isNotBlank() && upstreamMessage.isNotBlank() -> "$upstreamCode: $upstreamMessage"
+                    upstreamCode.isNotBlank() -> upstreamCode
+                    upstreamMessage.isNotBlank() -> upstreamMessage
+                    else -> "Upstream HTTP $upstreamStatus"
+                }
+                throw IllegalStateException("Option-chain unavailable • $reason")
+            }
             val root = JSONObject(body)
             if (!root.optString("provider").equals("upstox", true)) {
                 throw IllegalStateException("Unexpected option-chain data provider")
