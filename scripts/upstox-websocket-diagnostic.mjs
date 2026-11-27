@@ -49,12 +49,17 @@ const timer = setTimeout(() => {
 
 ws.addEventListener("open", () => {
   console.log("WEBSOCKET_CONNECTED");
-  ws.send(JSON.stringify({
-    guid: "mgrow-isolated-diagnostic",
-    method: "sub",
-    data: { mode: "ltpc", instrumentKeys: instruments },
-  }));
-  console.log("SUBSCRIPTION_SENT for NIFTY, BANKNIFTY, FINNIFTY");
+  setTimeout(() => {
+    if (finished || ws.readyState !== WebSocket.OPEN) return;
+    const request = {
+      guid: "mgrow-isolated-diagnostic",
+      method: "sub",
+      data: { mode: "ltpc", instrumentKeys: instruments },
+    };
+    // Upstox V3 requires the JSON subscription request as a binary frame.
+    ws.send(new TextEncoder().encode(JSON.stringify(request)));
+    console.log("BINARY_SUBSCRIPTION_SENT for NIFTY, BANKNIFTY, FINNIFTY");
+  }, 1000);
 });
 ws.addEventListener("message", () => {
   messageCount += 1;
