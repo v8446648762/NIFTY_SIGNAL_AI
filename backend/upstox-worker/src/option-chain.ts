@@ -3,6 +3,13 @@ const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_STRIKES = 200;
 
+export class UpstreamOptionChainHttpError extends Error {
+  constructor(readonly upstreamStatus: number, readonly upstreamCode: string | null, safeMessage: string | null) {
+    super(safeMessage ?? "Upstox option-chain request was rejected");
+    this.name = "UpstreamOptionChainHttpError";
+  }
+}
+
 const EXPIRY_KEYWORDS = new Set([
   "current_week", "next_week", "far_week",
   "current_month", "next_month", "far_month",
@@ -119,7 +126,19 @@ export async function fetchNiftyOptionChain(expiry: string, token: string): Prom
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(response.status === 429 ? "upstream_rate_limited" : "upstream_option_chain_error");
+      const responseText = await response.text();
+      let upstreamCode: string | null = null;
+      let safeMessage: string | null = null;
+      try {
+        const parsed = JSON.parse(responseText) as Record<string, unknown>;
+        const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+        const first = errors[0] && typeof errors[0] === "object" ? errors[0] as Record<string, unknown> : null;
+        const code = first?.errorCode ?? first?.code ?? parsed.errorCode ?? parsed.code;
+        const message = first?.message ?? parsed.message ?? parsed.error;
+        if (typeof code === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(code)) upstreamCode = code;
+        if (typeof message === "string") safeMessage = message.replace(/Bearer\\s+\\S+/gi, "Bearer [redacted]").replace(/[\\r\\n]+/g, " ").slice(0, 160);
+      } catch { /* Never return arbitrary upstream response bodies. */ }
+      throw new UpstreamOptionChainHttpError(response.status, upstreamCode, safeMessage);
     }
     return await response.json();
   } finally {
