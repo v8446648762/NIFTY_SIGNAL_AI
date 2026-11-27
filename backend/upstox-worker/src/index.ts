@@ -49,7 +49,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   const isOptionChainPath = url.pathname === "/v1/nifty/option-chain";
-  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && !isOptionChainPath) return json({ error: "not_found" }, 404);
+  const isIndicesPath = url.pathname === "/v1/indices";
+  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && !isOptionChainPath && !isIndicesPath) return json({ error: "not_found" }, 404);
   if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "upstox_token_not_configured" }, 503);
   }
@@ -59,6 +60,65 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const rateLimit = await env.QUOTE_LIMITER.limit({ key: `nifty-readonly:${clientIp}` });
     if (!rateLimit.success) return json({ error: "rate_limit_exceeded" }, 429, { "retry-after": "60" });
   } catch { return json({ error: "rate_limiter_unavailable" }, 503); }
+
+  if (isIndicesPath) {
+    try {
+      const instrumentKeys = ["NSE_INDEX|Nifty Bank", "NSE_INDEX|Nifty Fin Service"];
+      const query = new URLSearchParams({ instrument_key: instrumentKeys.join(",") });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+      try {
+        const upstream = await fetch(UPSTOX_BASE + "/market-quote/quotes?" + query.toString(), {
+          method: "GET",
+          headers: { Accept: "application/json", Authorization: "Bearer " + env.UPSTOX_ANALYTICS_TOKEN },
+          signal: controller.signal,
+        });
+        if (!upstream.ok) return json({ error: "upstream_indices_request_failed", upstreamStatus: upstream.status }, 502);
+        const payload: unknown = await upstream.json();
+        if (!payload || typeof payload !== "object" || (payload as Record<string, unknown>).status !== "success") {
+          return json({ error: "invalid_upstream_indices_payload" }, 502);
+        }
+        const rawData = (payload as Record<string, unknown>).data;
+        if (!rawData || typeof rawData !== "object") return json({ error: "invalid_upstream_indices_payload" }, 502);
+        const quotes = rawData as Record<string, unknown>;
+        const now = Date.now();
+        const result: Record<string, unknown> = {};
+        const definitions = [
+          ["BANKNIFTY", "NSE_INDEX:Nifty Bank"],
+          ["FINNIFTY", "NSE_INDEX:Nifty Fin Service"],
+        ] as const;
+        for (const [name, key] of definitions) {
+          const raw = quotes[key];
+          if (!raw || typeof raw !== "object") continue;
+          const quote = raw as Record<string, unknown>;
+          const lastPrice = quote.last_price;
+          const previousClose = quote.prev_close_price;
+          const lastTradeTime = Number(quote.last_trade_time);
+          const quoteTime = typeof quote.timestamp === "string" ? Date.parse(quote.timestamp) : NaN;
+          if (typeof lastPrice !== "number" || !Number.isFinite(lastPrice) || lastPrice <= 0 ||
+              typeof previousClose !== "number" || !Number.isFinite(previousClose) || previousClose <= 0 ||
+              !Number.isFinite(lastTradeTime) || lastTradeTime <= 0 ||
+              !Number.isFinite(quoteTime) || quoteTime > now + MAX_FUTURE_SKEW_MS) continue;
+          result[name] = {
+            lastPrice,
+            previousClose,
+            netChange: lastPrice - previousClose,
+            lastTradeTimeMs: lastTradeTime,
+            quoteTimestampMs: quoteTime,
+            isFresh: now - lastTradeTime >= 0 && now - lastTradeTime <= MAX_QUOTE_AGE_MS &&
+              now - quoteTime >= 0 && now - quoteTime <= MAX_QUOTE_AGE_MS,
+          };
+        }
+        if (Object.keys(result).length === 0) return json({ error: "indices_unavailable" }, 502);
+        return json({ provider: "upstox", receivedAtEpochMs: now, data: result });
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return json({ error: "upstream_indices_timeout" }, 504);
+      return json({ error: "upstream_indices_request_failed" }, 502);
+    }
+  }
 
   if (isOptionChainPath) {
     const expiry = validateOptionExpiry(url.searchParams.get("expiry_date"));
