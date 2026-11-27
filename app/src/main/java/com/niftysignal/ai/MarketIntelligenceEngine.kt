@@ -20,49 +20,64 @@ data class MarketIntelligenceSnapshot(
 
 object MarketIntelligenceEngine {
     fun evaluate(candles: List<MarketCandle>): MarketIntelligenceSnapshot? {
-        if (candles.size < 35 || !candles.all(::valid) ||
+        // Produce independent partial studies as soon as their own input history
+        // exists. Do not block EMA/RSI/Supertrend behind MACD/ADX warm-up.
+        if (candles.size < 15 || !candles.all(::valid) ||
             candles.zipWithNext().any { (a, b) -> b.timestampMillis <= a.timestampMillis }
         ) return null
 
         val closes = candles.map { it.close }
         val ema9 = TechnicalAnalysis.ema(closes, 9) ?: return null
-        val ema21 = TechnicalAnalysis.ema(closes, 21) ?: return null
+        val ema21 = TechnicalAnalysis.ema(closes, 21)
         val rsi = TechnicalAnalysis.rsi(closes, 14) ?: return null
-        val macd = macdState(closes) ?: return null
-        val adx = adx(candles) ?: return null
-        val supertrend = supertrend(candles) ?: return null
+        val macd = macdState(closes)
+        val adx = adx(candles)
+        val supertrend = supertrend(candles)
         val latest = candles.last()
         val bias = when {
-            ema9 > ema21 && rsi >= 50.0 && macd.first >= macd.second && supertrend -> "BULLISH"
-            ema9 < ema21 && rsi <= 50.0 && macd.first <= macd.second && !supertrend -> "BEARISH"
+            ema21 != null && ema9 > ema21 && rsi >= 50.0 -> "BULLISH"
+            ema21 != null && ema9 < ema21 && rsi <= 50.0 -> "BEARISH"
             else -> "SIDEWAYS / MIXED"
         }
         val volumeAverage = candles.takeLast(21).dropLast(1).map { it.volume }.average()
-        val volumeStatus = if (volumeAverage <= 0.0) "N/A (index volume 0)" else {
-            if (latest.volume > volumeAverage) "CONFIRMED" else "WEAK"
+        val volumeStatus = if (volumeAverage <= 0.0 || latest.volume <= 0.0) {
+            "N/A (index volume 0)"
+        } else if (candles.size < 21) {
+            "WARMING UP (<21 candles)"
+        } else if (latest.volume > volumeAverage) {
+            "CONFIRMED"
+        } else {
+            "WEAK"
         }
-        val breakout = breakoutStatus(candles)
-        val macdText = if (macd.first >= macd.second) "BULLISH" else "BEARISH"
+        val breakout = if (candles.size < 21) {
+            "WARMING UP (<21 candles)"
+        } else {
+            breakoutStatus(candles)
+        }
+        val macdText = macd?.let { if (it.first >= it.second) "BULLISH" else "BEARISH" }
+            ?: "WARMING UP (<34 candles)"
+        val supertrendText = supertrend?.let { if (it) "BULLISH" else "BEARISH" }
+            ?: "WARMING UP (<11 candles)"
 
         val indicatorRisk = (20.0 + max(0.0, abs(rsi - 50.0) - 15.0) * 2.5)
             .coerceIn(0.0, 100.0)
-        val trendRisk = (100.0 - adx.coerceIn(0.0, 50.0) * 2.0)
-            .coerceIn(0.0, 100.0)
-        val priceActionRisk = when {
-            breakout.startsWith("POSSIBLE FALSE") -> 85.0
-            breakout.startsWith("BULLISH") || breakout.startsWith("BEARISH") -> 30.0
-            else -> 55.0
-        }
-        val momentumAligned = (bias == "BULLISH" && macdText == "BULLISH") ||
-            (bias == "BEARISH" && macdText == "BEARISH")
+        val emaSpreadPct = if (ema21 == null) 0.0 else abs(ema9 - ema21) / latest.close * 100.0
+        val trendRisk = (75.0 - emaSpreadPct * 250.0).coerceIn(25.0, 85.0)
+        val averageRangePct = candles.takeLast(14).map { it.high - it.low }.average() /
+            latest.close * 100.0
+        val priceActionRisk = (averageRangePct * 300.0).coerceIn(10.0, 100.0)
+        val momentumAligned = macdText != "WARMING UP (<34 candles)" &&
+            ((bias == "BULLISH" && macdText == "BULLISH") ||
+                (bias == "BEARISH" && macdText == "BEARISH"))
         val sentimentRisk = when {
             bias == "SIDEWAYS / MIXED" -> 70.0
             momentumAligned -> 30.0
+            macd == null -> 50.0
             else -> 80.0
         }
         return MarketIntelligenceSnapshot(
             bias = bias,
-            supertrend = if (supertrend) "BULLISH" else "BEARISH",
+            supertrend = supertrendText,
             macd = macdText,
             adx = adx,
             volumeStatus = volumeStatus,
