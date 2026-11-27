@@ -1,4 +1,4 @@
-import { extractValidOptionChain, fetchNiftyOptionChain, validateOptionExpiry, UpstreamOptionChainHttpError } from "./option-chain.js";
+import { extractValidOptionChain, fetchIndexOptionChain, validateOptionExpiry, UpstreamOptionChainHttpError } from "./option-chain.js";
 export interface Env {
   UPSTOX_ANALYTICS_TOKEN: string;
   QUOTE_LIMITER: { limit(options: { key: string }): Promise<{ success: boolean }> };
@@ -6,6 +6,11 @@ export interface Env {
 
 const UPSTOX_BASE = "https://api.upstox.com/v3";
 const NIFTY_50_KEY = "NSE_INDEX|Nifty 50";
+const INDEX_INSTRUMENTS: Record<string, string> = {
+  NIFTY: NIFTY_50_KEY,
+  BANKNIFTY: "NSE_INDEX|Nifty Bank",
+  FINNIFTY: "NSE_INDEX|Nifty Fin Service",
+};
 const UPSTREAM_TIMEOUT_MS = 5_000;
 const MAX_QUOTE_AGE_MS = 60_000;
 const CANDLE_CACHE_TTL_MS = 55_000;
@@ -50,7 +55,9 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   const isOptionChainPath = url.pathname === "/v1/nifty/option-chain";
   const isIndicesPath = url.pathname === "/v1/indices";
-  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && !isOptionChainPath && !isIndicesPath) return json({ error: "not_found" }, 404);
+  const isIndexCandlesPath = url.pathname === "/v1/index/candles";
+  const isIndexOptionChainPath = url.pathname === "/v1/index/option-chain";
+  if (url.pathname !== "/v1/nifty/quote" && url.pathname !== "/v1/nifty/candles" && !isOptionChainPath && !isIndicesPath && !isIndexCandlesPath && !isIndexOptionChainPath) return json({ error: "not_found" }, 404);
   if (!env.UPSTOX_ANALYTICS_TOKEN) {
     return json({ error: "upstox_token_not_configured" }, 503);
   }
@@ -120,17 +127,68 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
-  if (isOptionChainPath) {
+  if (isIndexCandlesPath) {
+    const symbol = (url.searchParams.get("symbol") ?? "").toUpperCase();
+    const instrumentKey = INDEX_INSTRUMENTS[symbol];
+    if (!instrumentKey) return json({ error: "unsupported_index" }, 400);
+    try {
+      const fiveMinute = await fetchIntradayCandles("5", env.UPSTOX_ANALYTICS_TOKEN, instrumentKey);
+      if (!fiveMinute) return json({ error: "invalid_upstream_candle_payload" }, 502);
+      let oneMinute: Awaited<ReturnType<typeof fetchIntradayCandles>> = null;
+      let oneMinuteUnavailable = false;
+      try {
+        oneMinute = await fetchIntradayCandles("1", env.UPSTOX_ANALYTICS_TOKEN, instrumentKey);
+        if (!oneMinute) oneMinuteUnavailable = true;
+      } catch {
+        oneMinuteUnavailable = true;
+      }
+      const quote = await fetchIndexQuote(instrumentKey, env.UPSTOX_ANALYTICS_TOKEN);
+      const receivedAtEpochMs = Date.now();
+      return json({
+        provider: "upstox",
+        symbol,
+        instrumentKey,
+        receivedAt: new Date(receivedAtEpochMs).toISOString(),
+        receivedAtEpochMs,
+        data: {
+          fiveMinuteCandles: fiveMinute,
+          oneMinuteCandles: oneMinute ?? [],
+          previousClose: quote?.previousClose ?? null,
+          dayHigh: quote?.dayHigh ?? null,
+          dayLow: quote?.dayLow ?? null,
+        },
+        ...(oneMinuteUnavailable ? { warnings: ["one_minute_temporarily_unavailable"] } : {}),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return json({ error: "upstream_timeout" }, 504);
+      if (error instanceof UpstreamHttpError) {
+        const status = error.status === 429 ? 429 : 502;
+        return json({
+          error: error.status === 429 ? "upstream_rate_limited" : "upstream_candle_request_failed",
+          upstreamStatus: error.status,
+          interval: error.interval,
+          retryAfterSeconds: error.retryAfterSeconds,
+          ...(error.detail ? { upstreamDetail: error.detail } : {}),
+        }, status, error.status === 429 ? { "retry-after": String(error.retryAfterSeconds) } : {});
+      }
+      return json({ error: "upstream_candle_request_failed" }, 502);
+    }
+  }
+
+  if (isOptionChainPath || isIndexOptionChainPath) {
+    const symbol = isOptionChainPath ? "NIFTY" : (url.searchParams.get("symbol") ?? "").toUpperCase();
+    if (!INDEX_INSTRUMENTS[symbol]) return json({ error: "unsupported_index" }, 400);
     const expiry = validateOptionExpiry(url.searchParams.get("expiry_date"));
     if (!expiry) return json({ error: "invalid_expiry_date" }, 400);
     try {
-      const payload = await fetchNiftyOptionChain(expiry, env.UPSTOX_ANALYTICS_TOKEN);
+      const payload = await fetchIndexOptionChain(symbol, expiry, env.UPSTOX_ANALYTICS_TOKEN);
       const chain = extractValidOptionChain(payload);
       if (!chain) return json({ error: "invalid_upstream_option_chain_payload" }, 502);
       const receivedAtEpochMs = Date.now();
       return json({
         provider: "upstox",
-        instrumentKey: NIFTY_50_KEY,
+        symbol,
+        instrumentKey: INDEX_INSTRUMENTS[symbol],
         expiryDate: chain.expiry,
         receivedAt: new Date(receivedAtEpochMs).toISOString(),
         receivedAtEpochMs,
@@ -260,11 +318,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 async function fetchIntradayCandles(
   interval: "1" | "5",
   token: string,
+  instrumentKey: string = NIFTY_50_KEY,
 ): Promise<Array<{ timestamp: string; open: number; high: number; low: number; close: number; volume: number; openInterest: number }> | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
-    const instrument = encodeURIComponent(NIFTY_50_KEY);
+    const instrument = encodeURIComponent(instrumentKey);
     const upstream = await fetch(
       `${UPSTOX_BASE}/historical-candle/intraday/${instrument}/minutes/${interval}`,
       {
@@ -339,3 +398,38 @@ function extractValidQuote(payload: unknown): Record<string, unknown> | null {
   return record;
 }
 
+
+async function fetchIndexQuote(instrumentKey: string, token: string): Promise<{ previousClose: number | null; dayHigh: number | null; dayLow: number | null } | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    const query = new URLSearchParams({ instrument_key: instrumentKey });
+    const upstream = await fetch(`${UPSTOX_BASE}/market-quote/quotes?${query.toString()}`, {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    if (!upstream.ok) return null;
+    const payload: unknown = await upstream.json();
+    if (!payload || typeof payload !== "object") return null;
+    const root = payload as Record<string, unknown>;
+    const data = root.data as Record<string, unknown> | undefined;
+    const quote = data?.[instrumentKey.replace("|", ":")] as Record<string, unknown> | undefined;
+    if (!quote) return null;
+    const timestamp = typeof quote.timestamp === "string" ? Date.parse(quote.timestamp) : NaN;
+    if (!Number.isFinite(timestamp) || Date.now() - timestamp < -MAX_FUTURE_SKEW_MS || Date.now() - timestamp > MAX_QUOTE_AGE_MS) return null;
+    const previous = quote.prev_close_price;
+    const ohlc = quote.ohlc && typeof quote.ohlc === "object" ? quote.ohlc as Record<string, unknown> : {};
+    const high = ohlc.high;
+    const low = ohlc.low;
+    return {
+      previousClose: typeof previous === "number" && Number.isFinite(previous) && previous > 0 ? previous : null,
+      dayHigh: typeof high === "number" && Number.isFinite(high) && high > 0 ? high : null,
+      dayLow: typeof low === "number" && Number.isFinite(low) && low > 0 ? low : null,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
