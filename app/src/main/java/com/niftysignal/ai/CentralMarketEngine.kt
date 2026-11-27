@@ -164,7 +164,7 @@ object CentralMarketEngine {
     }
 
     private fun validSeries(candles: List<MarketCandle>): Boolean =
-        candles.size >= 2 &&
+        candles.isNotEmpty() &&
             candles.zipWithNext().all { (a, b) -> b.timestampMillis > a.timestampMillis } &&
             candles.all { candle ->
                 val values = listOf(candle.open, candle.high, candle.low, candle.close, candle.volume)
