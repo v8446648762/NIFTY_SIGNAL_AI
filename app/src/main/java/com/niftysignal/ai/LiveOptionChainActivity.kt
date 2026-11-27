@@ -186,6 +186,7 @@ class LiveOptionChainActivity : Activity() {
             if (rows.isEmpty()) throw IllegalStateException("No valid option-chain strike rows received")
             val snapshot = ChainSnapshot(root.optString("expiryDate"), spot, receivedAt, rows)
             latestSnapshot = snapshot
+            publishToCentralEngine(snapshot)
             runOnUiThread { renderSnapshot(snapshot) }
         } catch (error: Exception) {
             val message = error.message ?: "Unable to refresh option chain"
@@ -197,6 +198,46 @@ class LiveOptionChainActivity : Activity() {
             connection?.disconnect()
             requestInFlight = false
         }
+    }
+
+    private fun publishToCentralEngine(snapshot: ChainSnapshot) {
+        val totalCallOi = snapshot.rows.sumOf { it.callOi ?: 0.0 }
+        val totalPutOi = snapshot.rows.sumOf { it.putOi ?: 0.0 }
+        val maxCallOi = snapshot.rows.filter { it.callOi != null }.maxByOrNull { it.callOi!! }
+        val maxPutOi = snapshot.rows.filter { it.putOi != null }.maxByOrNull { it.putOi!! }
+        val maxCallAddition = snapshot.rows.filter { (it.callOiChange ?: 0.0) > 0.0 }
+            .maxByOrNull { it.callOiChange!! }
+        val maxPutAddition = snapshot.rows.filter { (it.putOiChange ?: 0.0) > 0.0 }
+            .maxByOrNull { it.putOiChange!! }
+        val analysis = OptionChainAnalysis(
+            strikes = snapshot.rows.map { row ->
+                OptionChainStrike(
+                    strike = row.strike,
+                    callOi = row.callOi,
+                    callOiChange = row.callOiChange,
+                    callVolume = null,
+                    callLtp = row.callLtp,
+                    putOi = row.putOi,
+                    putOiChange = row.putOiChange,
+                    putVolume = null,
+                    putLtp = row.putLtp
+                )
+            },
+            totalCallOi = totalCallOi,
+            totalPutOi = totalPutOi,
+            pcr = if (totalCallOi > 0.0) totalPutOi / totalCallOi else null,
+            maxCallOiStrike = maxCallOi?.strike,
+            maxPutOiStrike = maxPutOi?.strike,
+            maxCallAdditionStrike = maxCallAddition?.strike,
+            maxPutAdditionStrike = maxPutAddition?.strike,
+            totalRows = snapshot.rows.size,
+            warnings = listOf(
+                "Upstox Worker fetch timestamp is recent; per-strike exchange timestamps are not exposed."
+            )
+        )
+        CentralMarketEngine.publishOptionChainSnapshot(
+            OptionChainSnapshot(analysis, snapshot.receivedAtMillis, snapshot.spot)
+        )
     }
 
     private fun parseRows(array: JSONArray): List<StrikeRow> {
