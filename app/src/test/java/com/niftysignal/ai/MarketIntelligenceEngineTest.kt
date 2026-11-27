@@ -20,8 +20,19 @@ class MarketIntelligenceEngineTest {
         assertNotNull(RiskAssessmentEngine.evaluate(result.riskInputs))
     }
 
-    @Test fun refusesInsufficientOrInvalidCandles() {
-        assertNull(MarketIntelligenceEngine.evaluate(risingCandles(30)))
+    @Test fun keepsIndependentStudiesAvailableWhileLongerIndicatorsWarmUp() {
+        val result = MarketIntelligenceEngine.evaluate(risingCandles(18))
+        assertNotNull(result)
+        assertEquals("BULLISH", result!!.bias)
+        assertEquals("BULLISH", result.supertrend)
+        assertEquals("WARMING UP (<34 candles)", result.macd)
+        assertEquals("WARMING UP (<21 candles)", result.breakoutStatus)
+        assertNotNull(RiskAssessmentEngine.evaluate(result.riskInputs))
+    }
+
+    @Test fun refusesOnlyInsufficientBaseHistoryOrInvalidCandles() {
+        assertNull(MarketIntelligenceEngine.evaluate(risingCandles(14)))
+        assertNotNull(MarketIntelligenceEngine.evaluate(risingCandles(30)))
         val invalid = risingCandles().toMutableList()
         invalid[10] = invalid[10].copy(high = invalid[10].low - 1.0)
         assertNull(MarketIntelligenceEngine.evaluate(invalid))
