@@ -700,16 +700,16 @@ class MainActivity : FragmentActivity() {
                 pageContent.addView(buildAiDetectionCenter())
             }
             "Chart" -> {
-                pageContent.addView(buildPageHeading("CHART & INDICATORS", "Live candles and technical studies"))
+                pageContent.addView(buildPageHeading("CHART & INDICATORS", "${selectedIndexLabel()} live candles and technical studies"))
                 pageContent.addView(buildChartCard()); addGap(pageContent, 12)
                 pageContent.addView(buildIndicators()); addGap(pageContent, 12)
                 pageContent.addView(buildLevels()); addGap(pageContent, 12)
                 pageContent.addView(buildAdvancedMarketStudies())
             }
             "Options" -> {
-                pageContent.addView(buildPageHeading("NIFTY OPTION CHAIN", "Read-only Upstox option-chain snapshot"))
+                pageContent.addView(buildPageHeading("${selectedIndexLabel()} OPTION CHAIN", "Read-only Upstox option-chain snapshot"))
                 val panel = card()
-                panel.addView(text("LIVE OPTION CHAIN", 12f, cyan, true)); addGap(panel, 8)
+                panel.addView(text("${selectedIndexLabel()} LIVE OPTION CHAIN", 12f, cyan, true)); addGap(panel, 8)
                 panel.addView(text("View strikes, CE / PE OI, PCR and available option-chain snapshot data. This is market analysis only; no broker orders are placed.", 11f, muted))
                 addGap(panel, 12)
                 panel.addView(Button(this).apply {
@@ -753,7 +753,10 @@ class MainActivity : FragmentActivity() {
         if (selectedIndex == "NIFTY") {
             val serviceFeed = niftyServiceFeed
             if (serviceFeed != null) attachMarketDataFeed(serviceFeed)
-            else updateFeedStatus(FeedConnectionState.CONNECTING, "Waiting for secure NIFTY feed service")
+            else {
+                detachMarketDataFeed()
+                updateFeedStatus(FeedConnectionState.CONNECTING, "Waiting for secure NIFTY feed service")
+            }
             return
         }
         attachMarketDataFeed(IndexMarketDataFeed(selectedIndex))
@@ -1134,7 +1137,7 @@ class MainActivity : FragmentActivity() {
         val optionChainCard = card().apply {
             background = rounded(Color.rgb(10, 27, 45), Color.rgb(48, 119, 171), 18)
         }
-        optionChainCard.addView(text("NIFTY OPTION CHAIN", 12f, blueAccent, true))
+        optionChainCard.addView(text("${selectedIndexLabel()} OPTION CHAIN", 12f, blueAccent, true))
         addGap(optionChainCard, 6)
         optionChainCard.addView(text(
             "Read-only Upstox option-chain snapshot • cached last available data • automatic 30-second refresh while open",
