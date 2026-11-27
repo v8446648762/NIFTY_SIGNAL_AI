@@ -12,7 +12,7 @@ class MarketIntelligenceEngineTest {
     @Test fun calculatesTrendMomentumAndRiskFromValidatedCandles() {
         val result = MarketIntelligenceEngine.evaluate(risingCandles())
         assertNotNull(result)
-        assertEquals("BULLISH", result!!.bias)
+        assertEquals("BULLISH (EARLY)", result!!.bias)
         assertEquals("BULLISH", result.supertrend)
         assertEquals("BULLISH", result.macd)
         assertNotNull(result.adx)
