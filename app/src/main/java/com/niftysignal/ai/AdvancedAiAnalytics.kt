@@ -40,7 +40,12 @@ object AdvancedAiAnalytics {
     fun unavailable(now: Long, reason: String): AiPerformanceReport =
         AiPerformanceReport(now, detectionNames.map { AiDetection(it, null, reason) })
 
-    fun evaluate(candles5m: List<MarketCandle>, candles1m: List<MarketCandle>, now: Long): AiPerformanceReport {
+    fun evaluate(
+        candles5m: List<MarketCandle>,
+        candles1m: List<MarketCandle>,
+        now: Long,
+        optionChain: OptionChainSnapshot? = null
+    ): AiPerformanceReport {
         if (candles5m.size < 22 || candles1m.size < 2 ||
             !validSeries(candles5m) || !validSeries(candles1m) ||
             now < candles5m.last().timestampMillis || now - candles5m.last().timestampMillis > 10 * 60_000L ||
@@ -78,7 +83,24 @@ object AdvancedAiAnalytics {
             detections += AiDetection("Smart money / volume spike", (ratio * 45).toInt().coerceIn(0, 100), "Latest volume is " + String.format(java.util.Locale.US, "%.2f", ratio) + "× its 20-candle average; volume is only a proxy, not proof of institutional flow.")
         }
 
-        detections += AiDetection("Option chain & OI analysis", null, "Live option-chain OI is not yet connected to this report; no OI score is fabricated.")
+        val freshOptionChain = optionChain?.takeIf {
+            it.capturedAtMillis > 0L && it.capturedAtMillis <= now &&
+                now - it.capturedAtMillis <= 5 * 60_000L &&
+                it.underlyingPrice.isFinite() && it.underlyingPrice > 0.0 &&
+                it.analysis.pcr?.let { pcr -> pcr.isFinite() && pcr > 0.0 } == true
+        }
+        val optionPcr = freshOptionChain?.analysis?.pcr
+        val optionScore = optionPcr?.let { if (it >= 1.10 || it <= 0.90) 75 else 50 }
+        detections += AiDetection(
+            "Option chain & OI analysis",
+            optionScore,
+            if (optionPcr == null) {
+                "Recent verified Upstox option-chain PCR is unavailable; no OI score is fabricated."
+            } else {
+                "Recent Upstox API snapshot • PCR " + String.format(java.util.Locale.US, "%.3f", optionPcr) +
+                    ". Per-strike exchange timestamps are not exposed; treat OI as a recent API observation, not tick-verified data."
+            }
+        )
         val fakeout = (last.high > resistance && last.close <= resistance) || (last.low < support && last.close >= support)
         detections += AiDetection("Fakeout detection", if (fakeout) 85 else if (last.close > resistance || last.close < support) 70 else 35, if (fakeout) "Wick broke the recent range but candle closed back inside." else "No clear failed breakout on the latest candle.")
 
