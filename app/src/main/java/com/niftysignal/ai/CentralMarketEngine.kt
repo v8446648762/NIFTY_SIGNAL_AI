@@ -19,6 +19,24 @@ data class CentralVolumeProfile(
     val available: Boolean
 )
 
+data class CentralTradeReferenceLevels(
+    val direction: TradeBias,
+    val entry: Double,
+    val stop: Double,
+    val target: Double,
+    val riskReward: Double
+)
+
+data class UnifiedAiDecision(
+    val bias: TradeBias,
+    val status: String,
+    val alignmentScore: Int?,
+    val reasons: List<String>,
+    val warnings: List<String>,
+    val optionChainPcr: Double?,
+    val referenceLevels: CentralTradeReferenceLevels?
+)
+
 data class CentralMarketState(
     val snapshot: MarketDataSnapshot,
     val signalDecision: SignalDecision,
@@ -27,6 +45,7 @@ data class CentralMarketState(
     val aiPerformanceReport: AiPerformanceReport,
     val advancedSignalResult: AdvancedSignalResult,
     val riskAssessment: RiskAssessment?,
+    val unifiedAiDecision: UnifiedAiDecision,
     val fiveMinuteChartIndicators: CentralChartIndicators,
     val oneMinuteChartIndicators: CentralChartIndicators,
     val stochasticRsi: Double?,
@@ -114,6 +133,16 @@ object CentralMarketEngine {
         }
         val risk = if (canonicalSnapshot.isStale) null
             else intelligence?.riskInputs?.let(RiskAssessmentEngine::evaluate)
+        val averageRange14 = candles5m.takeLast(14).map { it.high - it.low }
+            .average().takeIf { it.isFinite() && it > 0.0 }
+        val unifiedDecision = unifyDecision(
+            canonicalSnapshot.isStale,
+            decision,
+            nextCandle,
+            advancedSignal,
+            averageRange14,
+            candles5m.lastOrNull()?.close
+        )
 
         fun chartIndicators(candles: List<MarketCandle>) = CentralChartIndicators(
             ema9Series = TechnicalAnalysis.emaSeries(candles.map { it.close }, 9),
@@ -129,12 +158,93 @@ object CentralMarketEngine {
             aiPerformanceReport = report,
             advancedSignalResult = advancedSignal,
             riskAssessment = risk,
+            unifiedAiDecision = unifiedDecision,
             fiveMinuteChartIndicators = chartIndicators(candles5m),
             oneMinuteChartIndicators = chartIndicators(candles1m),
             stochasticRsi = stochasticRsi(candles5m),
             volumeProfile = volumeProfile(candles5m),
-            averageRange14 = candles5m.takeLast(14).map { it.high - it.low }
-                .average().takeIf { it.isFinite() && it > 0.0 }
+            averageRange14 = averageRange14
+        )
+    }
+
+    private fun unifyDecision(
+        stale: Boolean,
+        technical: SignalDecision,
+        nextCandle: NextCandlePrediction,
+        advanced: AdvancedSignalResult,
+        averageRange: Double?,
+        latestPrice: Double?
+    ): UnifiedAiDecision {
+        if (stale) {
+            return UnifiedAiDecision(
+                TradeBias.WAIT, "PAUSED • NOT LIVE", null,
+                listOf("Central market data is stale; all AI decisions are paused."),
+                listOf("No signal, entry, stop or target is available until fresh validated data arrives."),
+                null, null
+            )
+        }
+        if (!technical.confirmed || technical.bias == TradeBias.WAIT) {
+            return UnifiedAiDecision(
+                TradeBias.WAIT, "WAIT • PRIMARY SETUP NOT CONFIRMED", null,
+                technical.reasons,
+                listOf("Supporting AI modules cannot create a trade direction without the primary technical setup."),
+                advanced.optionChainPcr, null
+            )
+        }
+
+        val candleBias = when (nextCandle.direction) {
+            NextCandleDirection.GREEN -> TradeBias.BUY_CE
+            NextCandleDirection.RED -> TradeBias.BUY_PE
+            NextCandleDirection.WAIT -> TradeBias.WAIT
+        }
+        val conflicts = mutableListOf<String>()
+        if (candleBias != TradeBias.WAIT && candleBias != technical.bias) {
+            conflicts += "Next-candle model conflicts with the primary technical setup."
+        }
+        if (advanced.bias != TradeBias.WAIT && advanced.bias != technical.bias) {
+            conflicts += "Options-aware advanced model conflicts with the primary technical setup."
+        }
+        if (conflicts.isNotEmpty()) {
+            return UnifiedAiDecision(
+                TradeBias.WAIT, "CONFLICT • WAIT", 0,
+                technical.reasons + conflicts,
+                listOf("Conflicting model outputs are never shown as separate BUY CE / BUY PE recommendations."),
+                advanced.optionChainPcr, null
+            )
+        }
+
+        val confirmations = listOf(
+            candleBias == technical.bias,
+            advanced.bias == technical.bias
+        ).count { it }
+        val alignment = 60 + confirmations * 20
+        val status = when (confirmations) {
+            2 -> "ALL MODULES ALIGNED"
+            1 -> "PARTIAL CONFIRMATION"
+            else -> "TECHNICAL SETUP • CONFIRMATION WAITING"
+        }
+        val reasons = technical.reasons +
+            (if (candleBias == technical.bias) listOf("Next 5-minute candle model agrees.") else emptyList()) +
+            (if (advanced.bias == technical.bias) listOf("Options-aware advanced model agrees.") else emptyList())
+        val warnings = buildList {
+            if (candleBias == TradeBias.WAIT) add("Next-candle confirmation is not ready; this is not full AI confluence.")
+            if (advanced.optionChainPcr == null) add("Recent verified option-chain data is unavailable; OI/PCR is excluded.")
+            else if (advanced.bias == TradeBias.WAIT) add("Option-chain data is present but does not confirm a directional setup.")
+            add("Alignment score is rule-based confluence, not a probability of profit.")
+        }
+        val levels = if (averageRange != null && latestPrice != null &&
+            averageRange.isFinite() && averageRange > 0.0 && latestPrice.isFinite() && latestPrice > 0.0
+        ) {
+            val bullish = technical.bias == TradeBias.BUY_CE
+            val stop = if (bullish) latestPrice - averageRange else latestPrice + averageRange
+            val target = if (bullish) latestPrice + averageRange * 1.5 else latestPrice - averageRange * 1.5
+            if (stop > 0.0 && target > 0.0) {
+                CentralTradeReferenceLevels(technical.bias, latestPrice, stop, target, 1.5)
+            } else null
+        } else null
+        return UnifiedAiDecision(
+            technical.bias, status, alignment, reasons, warnings,
+            advanced.optionChainPcr, levels
         )
     }
 
