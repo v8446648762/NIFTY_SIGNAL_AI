@@ -80,6 +80,22 @@ test("option-chain endpoint rejects malformed upstream data", async () => {
   assert.deepEqual(await response.json(), { error: "invalid_upstream_option_chain_payload" });
 });
 
+test("option-chain endpoint reports sanitized Upstox access errors", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: "error",
+    errors: [{ errorCode: "UDAPI1149", message: "Option chain access is not enabled for this account" }],
+  }), { status: 403 });
+  const response = await handleRequest(new Request("https://worker.test/v1/nifty/option-chain?expiry_date=current_week", {
+    headers: { "CF-Connecting-IP": "192.0.2.32" },
+  }), env);
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.upstreamStatus, 403);
+  assert.equal(body.upstreamCode, "UDAPI1149");
+  assert.match(body.upstreamMessage, /access is not enabled/);
+  assert.equal(JSON.stringify(body).includes(env.UPSTOX_ANALYTICS_TOKEN), false);
+});
+
 test("option-chain endpoint is rate-limited", async () => {
   env.QUOTE_LIMITER.limit = async () => ({ success: false });
   globalThis.fetch = async () => { throw new Error("must not call upstream"); };
