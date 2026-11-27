@@ -1188,7 +1188,7 @@ class MainActivity : FragmentActivity() {
         val passed = visibleDetections.count { it.passed }
         val failed = visibleDetections.count { it.failed }
         box.addView(text(
-            "PASSED $passed  •  FAILED $failed  •  UNAVAILABLE ${visibleDetections.size - available}",
+            "PASSED $passed  •  FAILED $failed  •  WAITING ${visibleDetections.size - available}",
             11f, white, true
         ))
         box.addView(text(
@@ -1201,7 +1201,9 @@ class MainActivity : FragmentActivity() {
         }
         visibleDetections.forEach { item ->
             val status = when {
-                item.score == null -> "DATA UNAVAILABLE"
+                item.score == null && item.detail.startsWith("No verified live news") -> "SOURCE NOT CONNECTED"
+                item.score == null && item.detail.startsWith("Recent verified Upstox option-chain") -> "SOURCE NOT READY"
+                item.score == null -> "WAITING FOR DATA"
                 item.score >= 60 -> "PASSED • ${item.score}%"
                 else -> "FAILED • ${item.score}%"
             }
