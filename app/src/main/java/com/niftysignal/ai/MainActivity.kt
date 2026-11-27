@@ -367,8 +367,11 @@ class MainActivity : FragmentActivity() {
 
         val latest = snapshot.fiveMinuteCandles.last()
         if (::indexPriceView.isInitialized) indexPriceView.text = formatMarketValue(latest.close)
-        if (::indexHintView.isInitialized) indexHintView.text =
+        if (::indexHintView.isInitialized) indexHintView.text = if (snapshot.isStale) {
+            "Last available 5-minute NIFTY candle • NOT LIVE"
+        } else {
             "Latest validated 5-minute NIFTY candle • Feed received just now"
+        }
 
         val previousClose = snapshot.previousClose?.takeIf { it.isFinite() && it > 0.0 }
         if (::changeValueView.isInitialized) {
@@ -1092,19 +1095,8 @@ class MainActivity : FragmentActivity() {
     private fun buildAdvancedMarketStudies(): View {
         val box = card()
         box.addView(text("ADVANCED INDICATOR STUDIES", 11f, cyan, true)); addGap(box, 8)
-        val candles = if (latestSnapshot?.isStale == false) latestSnapshot?.fiveMinuteCandles.orEmpty() else emptyList()
-        val closes = candles.map { it.close }
-        val rsiValues = mutableListOf<Double>()
-        if (closes.size >= 15) for (end in 14 until closes.size) {
-            var gains = 0.0; var losses = 0.0
-            for (i in end - 13..end) { val d = closes[i] - closes[i - 1]; if (d > 0) gains += d else losses -= d }
-            val ag = gains / 14.0; val al = losses / 14.0
-            rsiValues.add(if (al == 0.0) 100.0 else 100.0 - 100.0 / (1.0 + ag / al))
-        }
-        val stoch = if (rsiValues.size >= 14) {
-            val w = rsiValues.takeLast(14); val lo = w.minOrNull() ?: 0.0; val hi = w.maxOrNull() ?: 0.0
-            if (hi > lo) (w.last() - lo) / (hi - lo) * 100.0 else 50.0
-        } else null
+        val central = centralMarketState?.takeIf { it.isLive }
+        val stoch = central?.stochasticRsi
         val sc = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(11), dp(12), dp(11)); background = rounded(surface2, border, 14)
             addView(text("STOCHASTIC RSI (14,14)", 10f, muted, true))
@@ -1114,20 +1106,15 @@ class MainActivity : FragmentActivity() {
         }
         box.addView(sc); addGap(box, 10)
         box.addView(text("VOLUME PROFILE • CLOSE-BASED APPROXIMATION", 10f, muted, true))
-        val total = candles.sumOf { it.volume }
-        if (candles.isEmpty() || total <= 0.0) {
+        val profile = central?.volumeProfile
+        if (profile == null || !profile.available) {
             box.addView(text("Unavailable: validated candle volume is missing or zero.", 11f, amber))
         } else {
-            val lo = candles.minOf { it.low }; val hi = candles.maxOf { it.high }; val step = ((hi - lo) / 12.0).takeIf { it > 0.0 } ?: 1.0
-            val bins = linkedMapOf<Int, Double>()
-            candles.forEach { c -> val k = ((c.close - lo) / step).toInt().coerceIn(0, 11); bins[k] = (bins[k] ?: 0.0) + c.volume }
-            val maxV = bins.values.maxOrNull() ?: 0.0
-            val pocKey = bins.maxByOrNull { it.value }?.key
-            val poc = pocKey?.let { lo + (it + 0.5) * step }
-            box.addView(text("Point of Control (approx.): ${formatMarketValue(poc)}", 15f, green, true))
-            bins.entries.sortedByDescending { it.value }.take(4).forEach { e ->
-                val level = lo + (e.key + 0.5) * step; val ratio = if (maxV > 0.0) e.value / maxV else 0.0
-                box.addView(text("${formatMarketValue(level)}  •  " + "▰".repeat((ratio * 12).toInt().coerceAtLeast(1)), 10f, muted))
+            val maxVolume = profile.levels.maxOfOrNull { it.volume } ?: 0.0
+            box.addView(text("Point of Control (approx.): ${formatMarketValue(profile.pointOfControl)}", 15f, green, true))
+            profile.levels.forEach { level ->
+                val ratio = if (maxVolume > 0.0) level.volume / maxVolume else 0.0
+                box.addView(text("${formatMarketValue(level.price)}  •  " + "▰".repeat((ratio * 12).toInt().coerceAtLeast(1)), 10f, muted))
             }
             box.addView(text("Close-price buckets only; indicative, not exchange tick-level volume-at-price.", 9f, amber))
         }
@@ -1144,8 +1131,8 @@ class MainActivity : FragmentActivity() {
             box.addView(text("No entry, stop-loss or target while data is stale or setup is unconfirmed.", 10f, muted))
             return box
         }
-        val last = candles.last(); val ranges = candles.takeLast(14).map { it.high - it.low }.filter { it.isFinite() && it > 0.0 }
-        val vol = ranges.average().takeIf { it.isFinite() && it > 0.0 }
+        val last = candles.last()
+        val vol = centralMarketState?.averageRange14?.takeIf { it.isFinite() && it > 0.0 }
         if (vol == null) { box.addView(text("Reference levels unavailable: insufficient volatility data.", 11f, amber)); return box }
         val bull = decision.bias == TradeBias.BUY_CE; val entry = last.close
         val stop = if (bull) entry - vol else entry + vol; val target = if (bull) entry + vol * 1.5 else entry - vol * 1.5
@@ -2453,7 +2440,9 @@ class MainActivity : FragmentActivity() {
                     c.drawLine(l, liveY(vwap), r, liveY(vwap), line)
                     line.pathEffect = null
                 }
-                c.drawText("LIVE • EMA 9 / EMA 21" + if (vwap == null) " • VWAP N/A" else " • VWAP", l, dp(12).toFloat(), labelPaint)
+                val chartIsLive = centralMarketState?.isLive == true && latestSnapshot?.isStale == false
+                val chartStatus = if (chartIsLive) "LIVE" else "LAST AVAILABLE • NOT LIVE"
+                c.drawText(chartStatus + " • EMA 9 / EMA 21" + if (vwap == null) " • VWAP N/A" else " • VWAP", l, dp(12).toFloat(), labelPaint)
                 return
             }
 
